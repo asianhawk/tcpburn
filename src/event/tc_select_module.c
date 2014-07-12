@@ -12,7 +12,6 @@ int tc_select_create(tc_event_loop_t *loop)
 
     io = tc_palloc(loop->pool, sizeof(tc_select_multiplex_io_t));
     if (io == NULL) {
-        free(evs);
         return TC_EVENT_ERROR;
     }
 
@@ -42,11 +41,11 @@ int tc_select_destroy(tc_event_loop_t *loop)
             close(event->fd);
         }
         event->fd = -1;
-        free(event);
+        tc_pfree(loop->pool, event);
     }
 
-    free(io->evs);
-    free(loop->io);
+    tc_pfree(loop->pool, io->evs);
+    tc_pfree(loop->pool, loop->io);
 
     return TC_EVENT_OK;
 }

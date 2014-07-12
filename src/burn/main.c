@@ -15,6 +15,7 @@
 
 /* global variables for burn client */
 xcopy_clt_settings clt_settings;
+tc_stat_t          tc_stat;
 
 int tc_raw_socket_out;
 tc_event_loop_t event_loop;
@@ -266,7 +267,6 @@ output_for_debug(int argc, char **argv)
     tc_log_info(LOG_NOTICE, 0, "TC_PCAP_SEND mode");
 #endif
 
-
 }
 
 
@@ -374,6 +374,7 @@ parse_target(ip_port_pair_mapping_t *ip_port, char *addr)
     return 0;
 }
 
+
 /*
  * retrieve target addresses
  * format
@@ -434,7 +435,8 @@ retrieve_target_addresses(char *raw_transfer,
 }
 
 
-static int retrieve_real_servers() 
+static int 
+retrieve_real_servers() 
 {
     int          count = 0;
     char        *split, *p, *seq, *port_s;
@@ -488,7 +490,8 @@ static int retrieve_real_servers()
 }
 
 
-static bool check_client_ip_valid(uint32_t ip)
+static bool 
+check_client_ip_valid(uint32_t ip)
 {
     int   i;
 
@@ -502,7 +505,8 @@ static bool check_client_ip_valid(uint32_t ip)
 }
 
 
-static int retrieve_client_ips() 
+static int 
+retrieve_client_ips() 
 {
     int          count = 0, len, i;
     char        *split, *p, tmp_ip[32], *q;
@@ -571,10 +575,12 @@ static int retrieve_client_ips()
 
 }
 
-static int retrieve_pcap_files() 
+
+static int 
+retrieve_pcap_files() 
 {
-    int          count = 0;
-    char        *split, *p;
+    int     count = 0;
+    char   *split, *p;
 
     p = clt_settings.raw_pcap_files;
 
@@ -612,7 +618,6 @@ static int retrieve_pcap_files()
 static int
 set_details()
 {
-
     clt_settings.sess_keepalive_timeout = clt_settings.sess_timeout;
     tc_log_info(LOG_NOTICE, 0, "keepalive timeout:%d", 
             clt_settings.sess_keepalive_timeout);
@@ -705,6 +710,7 @@ set_details()
     return 0;
 }
 
+
 /* set default values for burn client */
 static void
 settings_init()
@@ -725,8 +731,8 @@ settings_init()
 #endif
 
     tc_raw_socket_out = TC_INVALID_SOCKET;
-
 }
+
 
 static int 
 set_timer()
@@ -738,6 +744,7 @@ set_timer()
 
     return 0;
 }
+
 
 /*
  * main entry point
@@ -792,6 +799,8 @@ main(int argc, char **argv)
         return -1;
     }
 
+    tc_event_timer_init();
+
     ret = tc_event_loop_init(&event_loop, MAX_FD_NUM);
     if (ret == TC_EVENT_ERROR) {
         tc_log_info(LOG_ERR, 0, "event loop init failed");
@@ -799,7 +808,7 @@ main(int argc, char **argv)
     } 
 
     if (is_continue) {
-        ret = tc_build_sess_table(clt_settings.pool, 65536);
+        ret = tc_build_sess_table(65536);
         if (ret == TC_ERROR) {
             is_continue = 0;
         } else {

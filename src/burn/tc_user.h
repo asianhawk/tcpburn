@@ -82,8 +82,8 @@ typedef struct tc_user_s {
 #endif
 
     sess_data_t *orig_sess;
-    frame_t        *orig_frame;
-    frame_t        *orig_unack_frame;
+    frame_t     *orig_frame;
+    frame_t     *orig_unack_frame;
 
     time_t   last_sent_time;
     long     last_recv_resp_cont_time;
@@ -94,8 +94,25 @@ typedef struct tc_user_index_s {
     int index;
 }tc_user_index_t;
 
+typedef struct tc_stat_s {
+    uint64_t fin_sent_cnt; 
+    uint64_t rst_sent_cnt; 
+    uint64_t conn_cnt; 
+    uint64_t conn_reject_cnt; 
+    uint64_t rst_recv_cnt; 
+    uint64_t fin_recv_cnt; 
+    uint64_t resp_cnt; 
+    uint64_t resp_cont_cnt; 
+    uint64_t active_conn_cnt; 
+    uint64_t syn_sent_cnt; 
+    uint64_t packs_sent_cnt; 
+    uint64_t cont_sent_cnt; 
+    uint64_t orig_clt_packs_cnt; 
+}tc_stat_t;
 
-int tc_build_sess_table(tc_pool_t *pool, int size);
+extern tc_stat_t   tc_stat;
+
+int tc_build_sess_table(int size);
 bool tc_build_users(int port_prioritized, int num_users, uint32_t *ips,
         int num_ip);
 

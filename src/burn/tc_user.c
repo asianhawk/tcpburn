@@ -11,23 +11,10 @@ static int size_of_users        = 0;
 static int base_user_seq        = 0;
 static int relative_user_seq    = 0;
 
-static uint64_t fin_sent_cnt    = 0;
-static uint64_t rst_sent_cnt    = 0;
-static uint64_t conn_cnt        = 0;
-static uint64_t conn_reject_cnt = 0;
-static uint64_t rst_recv_cnt    = 0;
-static uint64_t fin_recv_cnt    = 0;
-static uint64_t resp_cnt        = 0; 
-static uint64_t resp_cont_cnt   = 0;
-static uint64_t active_conn_cnt = 0;
-static uint64_t syn_sent_cnt    = 0;
-static uint64_t packs_sent_cnt  = 0; 
-static uint64_t cont_sent_cnt   = 0; 
-static uint64_t orig_clt_packs_cnt = 0; 
-
+static tc_pool_t        *g_pool = NULL;
 static tc_user_index_t  *user_index_array = NULL;
 static tc_user_t        *user_array       = NULL;
-static sess_table_t  *s_table          = NULL;
+static sess_table_t     *s_table          = NULL;
 
 static void send_faked_rst(tc_user_t *u);
 
@@ -48,22 +35,29 @@ supplemental_hash(uint32_t value)
     return h;
 }
 
+
 static uint32_t table_index(uint32_t h, uint32_t len)
 {
     return h & (len - 1);
 }
 
 int 
-tc_build_sess_table(tc_pool_t *pool, int size)
+tc_build_sess_table(int size)
 {
-    s_table = (sess_table_t *) tc_pcalloc(pool, sizeof(sess_table_t));
+    g_pool = tc_create_pool(TC_DEFAULT_POOL_SIZE, 0);
+
+    if (g_pool == NULL) {
+        return TC_ERROR;
+    }
+
+    s_table = (sess_table_t *) tc_pcalloc(g_pool, sizeof(sess_table_t));
     if (s_table == NULL) {
         tc_log_info(LOG_WARN, 0, "calloc error for sess table");
         return TC_ERROR;
     }
 
     s_table->size = size;
-    s_table->entries = (p_sess_entry *) tc_pcalloc(pool, 
+    s_table->entries = (p_sess_entry *) tc_pcalloc(g_pool, 
             size * sizeof(p_sess_entry));
 
     if (s_table->entries == NULL) {
@@ -74,6 +68,7 @@ tc_build_sess_table(tc_pool_t *pool, int size)
     return TC_OK;
 }
 
+
 uint64_t 
 tc_get_key(uint32_t ip, uint16_t port)
 {
@@ -82,6 +77,7 @@ tc_get_key(uint32_t ip, uint16_t port)
     uint64_t key = (ip_l << 16) + (ip_l << 8) + port_l; 
     return key;
 }
+
 
 void 
 tc_add_sess(p_sess_entry entry)
@@ -103,8 +99,8 @@ tc_add_sess(p_sess_entry entry)
     s_table->num_of_sess++;
     tc_log_debug2(LOG_DEBUG, 0, "index:%d,sess in table:%d",
             index, s_table->num_of_sess);
-
 }
+
 
 static void
 tc_init_sess_for_users()
@@ -176,7 +172,7 @@ tc_init_sess_for_users()
         u->orig_sess = &(e->data);
         u->orig_frame = u->orig_sess->first_frame;
         u->orig_unack_frame = u->orig_sess->first_frame;
-        orig_clt_packs_cnt += u->orig_sess->frames;
+        tc_stat.orig_clt_packs_cnt += u->orig_sess->frames;
         tc_log_debug3(LOG_DEBUG, 0, "index:%d,frames:%u, orig src port:%u", 
                 index, u->orig_sess->frames, 
                 ntohs(u->orig_sess->orig_src_port));
@@ -185,10 +181,11 @@ tc_init_sess_for_users()
 
     tc_log_info(LOG_NOTICE, 0, 
             "users:%d, sess:%d, total packets needed sent:%llu",
-            size_of_users, s_table->num_of_sess, orig_clt_packs_cnt);
+            size_of_users, s_table->num_of_sess, tc_stat.orig_clt_packs_cnt);
 
     tc_destroy_pool(pool);
 }
+
 
 p_sess_entry 
 tc_retrieve_sess(uint64_t key)
@@ -205,6 +202,7 @@ tc_retrieve_sess(uint64_t key)
 
     return last;
 }
+
 
 static tc_user_t *
 tc_retrieve_active_user()
@@ -253,6 +251,7 @@ tc_retrieve_active_user()
     return u;
 }
 
+
 tc_user_t *
 tc_retrieve_user(uint64_t key)
 {
@@ -277,10 +276,11 @@ tc_retrieve_user(uint64_t key)
     }
 
     return NULL;
-
 }
 
-static uint16_t get_port(int default_port)
+
+static uint16_t 
+get_port(int default_port)
 {
     int value;
 
@@ -322,7 +322,7 @@ tc_build_users(int port_prioritized, int num_users, uint32_t *ips, int num_ip)
 
     size_of_user_index = size_of_users / slot_avg;
 
-    user_array = (tc_user_t *) tc_pcalloc (pool, 
+    user_array = (tc_user_t *) tc_pcalloc (g_pool, 
             size_of_users * sizeof (tc_user_t));
     if (user_array == NULL) {
         tc_log_info(LOG_WARN, 0, "calloc error for users");
@@ -330,7 +330,7 @@ tc_build_users(int port_prioritized, int num_users, uint32_t *ips, int num_ip)
         return false;
     }
 
-    user_index_array = (tc_user_index_t *) tc_pcalloc (pool, 
+    user_index_array = (tc_user_index_t *) tc_pcalloc (g_pool, 
             size_of_user_index * sizeof(tc_user_index_t));
 
     if (user_array == NULL) {
@@ -472,7 +472,9 @@ tc_build_users(int port_prioritized, int num_users, uint32_t *ips, int num_ip)
     return true;
 }
 
-static bool send_stop(tc_user_t *u) 
+
+static bool
+send_stop(tc_user_t *u) 
 {
     int       send_diff;
     long      app_resp_diff;
@@ -540,6 +542,7 @@ static bool send_stop(tc_user_t *u)
     return false;
 }
 
+
 #if (!TC_SINGLE)
 static bool
 send_router_info(tc_user_t *u, uint16_t type)
@@ -587,6 +590,7 @@ send_router_info(tc_user_t *u, uint16_t type)
 }
 #endif
 
+
 static void
 fill_timestamp(tc_user_t *u, tc_tcp_header_t *tcp_header)
 {
@@ -606,6 +610,7 @@ fill_timestamp(tc_user_t *u, tc_tcp_header_t *tcp_header)
     tc_log_debug3(LOG_DEBUG, 0, "fill ts:%u,%u,p:%u", 
             u->ts_value, u->ts_ec_r, ntohs(u->src_port));
 }
+
 
 static void 
 update_timestamp(tc_user_t *u, tc_tcp_header_t *tcp_header)
@@ -661,6 +666,7 @@ update_timestamp(tc_user_t *u, tc_tcp_header_t *tcp_header)
     return;
 }
 
+
 #if (TC_PCAP_SEND)
 static void
 fill_frame(struct ethernet_hdr *hdr, unsigned char *smac, unsigned char *dmac)
@@ -671,7 +677,9 @@ fill_frame(struct ethernet_hdr *hdr, unsigned char *smac, unsigned char *dmac)
 }
 #endif
 
-static bool process_packet(tc_user_t *u, unsigned char *frame) 
+
+static bool 
+process_packet(tc_user_t *u, unsigned char *frame) 
 {
     bool                    result;
     uint16_t                size_ip, size_tcp, tot_len, cont_len;
@@ -729,9 +737,9 @@ static bool process_packet(tc_user_t *u, unsigned char *frame)
     tc_log_debug2(LOG_DEBUG, 0, "set ack seq:%u, p:%u",
             ntohl(u->exp_ack_seq), ntohs(u->src_port));
 
-    packs_sent_cnt++;
+    tc_stat.packs_sent_cnt++;
     if (tcp_header->syn) {
-        syn_sent_cnt++;
+        tc_stat.syn_sent_cnt++;
 #if (!TC_SINGLE)
         if (!send_router_info(u, CLIENT_ADD)) {
             return false;
@@ -740,17 +748,17 @@ static bool process_packet(tc_user_t *u, unsigned char *frame)
         u->state.last_ack_recorded = 0;
         u->state.status  |= SYN_SENT;
     } else if (tcp_header->fin) {
-        fin_sent_cnt++;
+        tc_stat.fin_sent_cnt++;
         u->state.status  |= CLIENT_FIN;
     } else if (tcp_header->rst) {
-        rst_sent_cnt++;
+        tc_stat.rst_sent_cnt++;
         u->state.status  |= CLIENT_FIN;
         tc_log_debug1(LOG_DEBUG, 0, "a reset packet to back:%u",
                 ntohs(u->src_port));
     }
 
     if (cont_len > 0) {
-        cont_sent_cnt++;
+        tc_stat.cont_sent_cnt++;
         u->state.status |= SEND_REQ;
     }
     if (u->state.timestamped) {
@@ -787,6 +795,7 @@ static bool process_packet(tc_user_t *u, unsigned char *frame)
         return false;
     }
 }
+
 
 static
 void process_user_packet(tc_user_t *u)
@@ -827,6 +836,7 @@ void process_user_packet(tc_user_t *u)
         }
     }
 }
+
 
 static void 
 send_faked_rst(tc_user_t *u)
@@ -898,8 +908,9 @@ send_faked_ack(tc_user_t *u)
     process_packet(u, frame);
 }
 
+
 static void
-fast_retransmit(tc_user_t *u, uint32_t cur_ack_seq)
+retransmit(tc_user_t *u, uint32_t cur_ack_seq)
 {
     frame_t          *unack_frame, *next;
 
@@ -936,6 +947,7 @@ fast_retransmit(tc_user_t *u, uint32_t cur_ack_seq)
         }
     }
 }
+
 
 static void
 update_ack_packets(tc_user_t *u, uint32_t cur_ack_seq)
@@ -981,6 +993,7 @@ update_ack_packets(tc_user_t *u, uint32_t cur_ack_seq)
     }
 
 }
+
 
 static void         
 retrieve_options(tc_user_t *u, int direction, tc_tcp_header_t *tcp_header)
@@ -1050,7 +1063,9 @@ retrieve_options(tc_user_t *u, int direction, tc_tcp_header_t *tcp_header)
     return;
 }
 
-void process_outgress(unsigned char *packet)
+
+void 
+process_outgress(unsigned char *packet)
 {
     uint16_t           size_ip, size_tcp, tot_len, cont_len;
     uint32_t           seq, ack_seq;
@@ -1060,7 +1075,7 @@ void process_outgress(unsigned char *packet)
     tc_tcp_header_t   *tcp_header;
 
     last_resp_time = tc_time();
-    resp_cnt++;
+    tc_stat.resp_cnt++;
     ip_header  = (tc_ip_header_t *) packet;
     size_ip    = ip_header->ihl << 2;
     tcp_header = (tc_tcp_header_t *) ((char *) ip_header + size_ip);
@@ -1095,7 +1110,7 @@ void process_outgress(unsigned char *packet)
         if (u->last_seq == seq && u->last_ack_seq == ack_seq) {
             u->fast_retransmit_cnt++;
             if (u->fast_retransmit_cnt == 3) {
-                fast_retransmit(u, ack_seq);
+                retransmit(u, ack_seq);
                 return;
             }
         } else {
@@ -1109,7 +1124,7 @@ void process_outgress(unsigned char *packet)
 
         if (cont_len > 0) {
             u->last_recv_resp_cont_time = tc_milliscond_time();
-            resp_cont_cnt++;
+            tc_stat.resp_cont_cnt++;
             u->state.resp_waiting = 0;   
             u->exp_ack_seq = htonl(seq + cont_len);
             send_faked_ack(u);
@@ -1122,8 +1137,8 @@ void process_outgress(unsigned char *packet)
                     ntohs(u->src_port));
             u->exp_ack_seq = htonl(ntohl(u->exp_ack_seq) + 1);
             if (!u->state.resp_syn_received) {
-                conn_cnt++;
-                active_conn_cnt++;
+                tc_stat.conn_cnt++;
+                tc_stat.active_conn_cnt++;
                 u->state.resp_syn_received = 1;
                 u->state.status |= SYN_CONFIRM;
                 tc_log_debug2(LOG_DEBUG, 0, "exp ack seq:%u, p:%u",
@@ -1161,15 +1176,15 @@ void process_outgress(unsigned char *packet)
                 }
 #endif
             }
-            fin_recv_cnt++;
+            tc_stat.fin_recv_cnt++;
 
         } else if (tcp_header->rst) {
             tc_log_info(LOG_NOTICE, 0, "recv rst from back:%u", 
                     ntohs(u->src_port));
-            rst_recv_cnt++;
+            tc_stat.rst_recv_cnt++;
             if (u->state.status == SYN_SENT) {
                 if (!u->state.over) {
-                    conn_reject_cnt++;
+                    tc_stat.conn_reject_cnt++;
                 }
             }
 
@@ -1202,7 +1217,8 @@ check_replay_complete()
 }
 
 
-void process_ingress()
+void 
+process_ingress()
 {
     tc_user_t  *u = NULL;
 
@@ -1216,8 +1232,8 @@ void process_ingress()
     } else {
         if (!u->state.over_recorded) {
             u->state.over_recorded = 1;
-            active_conn_cnt--;
-            if (active_conn_cnt == 0) {
+            tc_stat.active_conn_cnt--;
+            if (tc_stat.active_conn_cnt == 0) {
                 tc_over = 1;
             }
         }
@@ -1226,19 +1242,22 @@ void process_ingress()
     check_replay_complete();
 }
 
+
 void
 output_stat()
 {
-    tc_log_info(LOG_NOTICE, 0, "active conns:%llu", active_conn_cnt);
+    tc_log_info(LOG_NOTICE, 0, "active conns:%llu", tc_stat.active_conn_cnt);
     tc_log_info(LOG_NOTICE, 0, "reject:%llu, reset recv:%llu,fin recv:%llu",
-            conn_reject_cnt, rst_recv_cnt, fin_recv_cnt);
+            tc_stat.conn_reject_cnt, tc_stat.rst_recv_cnt, 
+            tc_stat.fin_recv_cnt);
     tc_log_info(LOG_NOTICE, 0, "reset sent:%llu, fin sent:%llu",
-            rst_sent_cnt, fin_sent_cnt);
+            tc_stat.rst_sent_cnt, tc_stat.fin_sent_cnt);
     tc_log_info(LOG_NOTICE, 0, "conns:%llu,resp packs:%llu,c-resp packs:%llu",
-            conn_cnt, resp_cnt, resp_cont_cnt);
+            tc_stat.conn_cnt, tc_stat.resp_cnt, tc_stat.resp_cont_cnt);
     tc_log_info(LOG_NOTICE, 0, 
-            "syn sent cnt:%llu,clt packs sent :%llu,clt cont sent:%llu",
-            syn_sent_cnt, packs_sent_cnt, cont_sent_cnt);
+            "syn sent cnt:%llu,clt packs sent:%llu,clt cont sent:%llu",
+            tc_stat.syn_sent_cnt, tc_stat.packs_sent_cnt, 
+            tc_stat.cont_sent_cnt);
 }
 
 void
@@ -1254,7 +1273,7 @@ release_user_resources()
     int                 i, rst_send_cnt = 0, valid_sess = 0;
     frame_t            *fr;
     tc_user_t          *u;
-    p_sess_entry     e;
+    p_sess_entry        e;
     struct sockaddr_in  targ_addr;
 
     memset(&targ_addr, 0, sizeof(targ_addr));
@@ -1299,19 +1318,15 @@ release_user_resources()
         }
 
         tc_log_info(LOG_NOTICE, 0, "valid sess:%d", valid_sess);
-        free(s_table->entries);
-        free(s_table);
     }
+
     s_table = NULL;
-
-    if (user_array) {
-        free(user_array);
-    }
     user_array = NULL;
-
-    if (user_index_array) {
-        free(user_index_array);
-    }
     user_index_array = NULL;
+
+    if (g_pool != NULL) {
+        tc_destroy_pool(g_pool);
+        g_pool = NULL;
+    }
 }
 

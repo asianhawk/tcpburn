@@ -311,7 +311,7 @@ tc_send_init(tc_event_loop_t *event_loop)
 #endif
 
     /* register a timer for activating sending packets */
-    tc_event_add_timer(event_loop->pool, 0, NULL, tc_process_packets);
+    tc_event_add_timer(event_loop->pool, 1, NULL, tc_process_packets);
 
     return TC_OK;
 }
@@ -324,6 +324,8 @@ tc_process_packets(tc_event_timer_t *evt)
     for (; i < clt_settings.throughput_factor; i++) {
         process_ingress();
     }
+
+    tc_event_update_timer(evt, 1);
 }
 
 static uint64_t

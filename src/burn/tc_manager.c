@@ -62,20 +62,7 @@ burn_release_resources()
     tc_pcap_over();
 #endif
 
-    if (clt_settings.transfer.mappings != NULL) {
-
-        for (i = 0; i < clt_settings.transfer.num; i++) {
-            free(clt_settings.transfer.mappings[i]);
-        }
-
-        free(clt_settings.transfer.mappings);
-        clt_settings.transfer.mappings = NULL;
-    }
-
-    if (clt_settings.mem_pool != NULL) {
-        free(clt_settings.mem_pool);
-        clt_settings.mem_pool = NULL;
-    }
+    tc_destroy_pool(clt_settings.pool);
 }
 
 void
