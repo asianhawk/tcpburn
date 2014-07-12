@@ -1,5 +1,5 @@
-#ifndef GRYPHON_INCLUDED
-#define GRYPHON_INCLUDED 
+#ifndef BURN_INCLUDED
+#define BURN_INCLUDED 
 
 #define LOCALHOST (inet_addr("127.0.0.1"))
 
@@ -94,12 +94,13 @@ typedef struct xcopy_clt_settings {
     unsigned int  do_daemonize:1;       /* daemon flag */
     unsigned int  percentage:7;         /* percentage of the full flow that 
                                            will be tranfered to the backend */
-    unsigned int  session_timeout:16;   /* max value for session timeout.
-                                           If reaching this value, the session
+    unsigned int  sess_timeout:16;   /* max value for sess timeout.
+                                           If reaching this value, the sess
                                            will be removed */
-    unsigned int  session_keepalive_timeout:16;  
+    unsigned int  sess_keepalive_timeout:16;  
     unsigned int  target_localhost:1;
 
+    tc_pool_t    *pool;
     char         *raw_transfer;         /* online_ip online_port target_ip
                                            target_port string */
 
@@ -118,7 +119,7 @@ typedef struct xcopy_clt_settings {
     long          pcap_time;
     pcap_t       *pcap;
     uint64_t      interval;             /* accelerated times */
-#if (GRYPHON_PCAP_SEND)
+#if (TC_PCAP_SEND)
     char         *output_if_name;
 #endif
     uint16_t      rand_port_shifted;   /* random port shifted */
@@ -151,4 +152,4 @@ extern xcopy_clt_settings clt_settings;
 #include <tc_message_module.h>
 #include <tc_packets_module.h>
 
-#endif /* GRYPHON_INCLUDED */
+#endif /* BURN_INCLUDED */

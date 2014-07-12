@@ -22,7 +22,7 @@ void tc_log_info(int level, int err, const char *fmt, ...);
 void tc_log_trace(int level, int err, int flag, tc_ip_header_t *ip_header,
         tc_tcp_header_t *tcp_header);
 
-#if (GRYPHON_DEBUG)
+#if (TC_DEBUG)
 
 #define tc_log_debug0(level, err, fmt)                                       \
     tc_log_info(level, err, (const char *) fmt)
@@ -67,7 +67,7 @@ void tc_log_trace(int level, int err, int flag, tc_ip_header_t *ip_header,
 #define tc_log_debug8(level, err, fmt, a1, a2, a3, a4, a5, a6, a7, a8)
 #define tc_log_debug_trace(level, err, flag, ip_header, tcp_header)
 
-#endif /* GRYPHON_DEBUG */
+#endif /* TC_DEBUG */
 
 #endif /* TC_LOG_INCLUDED */
 

@@ -19,7 +19,7 @@ xcopy_clt_settings clt_settings;
 int tc_raw_socket_out;
 tc_event_loop_t event_loop;
 
-#if (GRYPHON_SIGACTION)
+#if (TC_SIGACTION)
 static signal_t signals[] = {
     { SIGALRM, "SIGALRM", 0,    tc_time_sig_alarm },
     { SIGINT,  "SIGINT",  0,    burn_over },
@@ -34,7 +34,7 @@ static void
 usage(void)
 {
     printf("burn " VERSION "\n");
-#if (!GRYPHON_PCAP_SEND)
+#if (!TC_PCAP_SEND)
     printf("-x <transfer,> use <transfer,> to specify the IPs and ports of the source and target\n"
            "               servers. Suppose 'sourceIP' and 'sourcePort' are the IP and port \n"
            "               number of the source server you want to copy from, 'targetIP' and \n");
@@ -57,7 +57,7 @@ usage(void)
 #endif
     printf("-f <file,>     set the pcap file list\n");
     printf("-F <filter>    user filter (same as pcap filter)\n");
-#if (GRYPHON_PCAP_SEND)
+#if (TC_PCAP_SEND)
     printf("-o <device,>   The name of the interface to send. This is usually a driver\n"
            "               name followed by a unit number, for example eth0 for the first\n"
            "               Ethernet interface.\n");
@@ -105,7 +105,7 @@ read_args(int argc, char **argv)
          "a:" /* throughput factor */
          "I:" /* threshold interval time for acceleratation */
          "i:" 
-#if (GRYPHON_PCAP_SEND)
+#if (TC_PCAP_SEND)
          "o:" /* <device,> */
 #endif
          "m:" 
@@ -146,7 +146,7 @@ read_args(int argc, char **argv)
             case 'i':
                 clt_settings.conn_init_sp_fact = atoi(optarg);
                 break;
-#if (GRYPHON_PCAP_SEND)
+#if (TC_PCAP_SEND)
             case 'o':
                 clt_settings.output_if_name = optarg;
                 break;
@@ -173,7 +173,7 @@ read_args(int argc, char **argv)
                 clt_settings.raw_rs_list = optarg;
                 break;
             case 't':
-                clt_settings.session_timeout = atoi(optarg);
+                clt_settings.sess_timeout = atoi(optarg);
                 break;
             case 'h':
                 usage();
@@ -204,7 +204,7 @@ read_args(int argc, char **argv)
                         fprintf(stderr, "burn: option -%c require a file name\n", 
                                 optopt);
                         break;
-#if (GRYPHON_PCAP_SEND)
+#if (TC_PCAP_SEND)
                     case 'o':
                         fprintf(stderr, "burn: option -%c require a device name\n",
                                 optopt);
@@ -250,20 +250,20 @@ output_for_debug(int argc, char **argv)
     /* print out target info */
     tc_log_info(LOG_NOTICE, 0, "target:%s", clt_settings.raw_transfer);
 
-#if (GRYPHON_DEBUG)
-    tc_log_info(LOG_NOTICE, 0, "GRYPHON_DEBUG mode");
+#if (TC_DEBUG)
+    tc_log_info(LOG_NOTICE, 0, "TC_DEBUG mode");
 #endif
-#if (GRYPHON_SINGLE)
-    tc_log_info(LOG_NOTICE, 0, "GRYPHON_SINGLE mode");
+#if (TC_SINGLE)
+    tc_log_info(LOG_NOTICE, 0, "TC_SINGLE mode");
 #endif
-#if (GRYPHON_COMET)
-    tc_log_info(LOG_NOTICE, 0, "GRYPHON_COMET mode");
+#if (TC_COMET)
+    tc_log_info(LOG_NOTICE, 0, "TC_COMET mode");
 #endif
-#if (GRYPHON_ADVANCED)
-    tc_log_info(LOG_NOTICE, 0, "GRYPHON_ADVANCED mode");
+#if (TC_ADVANCED)
+    tc_log_info(LOG_NOTICE, 0, "TC_ADVANCED mode");
 #endif
-#if (GRYPHON_PCAP_SEND)
-    tc_log_info(LOG_NOTICE, 0, "GRYPHON_PCAP_SEND mode");
+#if (TC_PCAP_SEND)
+    tc_log_info(LOG_NOTICE, 0, "TC_PCAP_SEND mode");
 #endif
 
 
@@ -398,8 +398,8 @@ retrieve_target_addresses(char *raw_transfer,
         }
     }
 
-    transfer->mappings = malloc(transfer->num *
-                                sizeof(ip_port_pair_mapping_t *));
+    transfer->mappings = tc_palloc(clt_settings.pool, 
+            transfer->num * sizeof(ip_port_pair_mapping_t *));
     if (transfer->mappings == NULL) {
         return -1;
     }
@@ -407,7 +407,8 @@ retrieve_target_addresses(char *raw_transfer,
             transfer->num * sizeof(ip_port_pair_mapping_t *));
 
     for (i = 0; i < transfer->num; i++) {
-        transfer->mappings[i] = malloc(sizeof(ip_port_pair_mapping_t));
+        transfer->mappings[i] = tc_palloc(clt_settings.pool, 
+                sizeof(ip_port_pair_mapping_t));
         if (transfer->mappings[i] == NULL) {
             return -1;
         }
@@ -612,9 +613,9 @@ static int
 set_details()
 {
 
-    clt_settings.session_keepalive_timeout = clt_settings.session_timeout;
+    clt_settings.sess_keepalive_timeout = clt_settings.sess_timeout;
     tc_log_info(LOG_NOTICE, 0, "keepalive timeout:%d", 
-            clt_settings.session_keepalive_timeout);
+            clt_settings.sess_keepalive_timeout);
 
     if (clt_settings.users <= 0) {
         tc_log_info(LOG_ERR, 0, "please set the -u parameter");
@@ -670,7 +671,7 @@ set_details()
     tc_log_info(LOG_NOTICE, 0, "init connections speed:%d", 
             clt_settings.conn_init_sp_fact);
 
-#if (GRYPHON_PCAP_SEND)
+#if (TC_PCAP_SEND)
     if (clt_settings.output_if_name != NULL) {
         tc_log_info(LOG_NOTICE, 0, "output device:%s", 
                 clt_settings.output_if_name);
@@ -717,9 +718,9 @@ settings_init()
     clt_settings.port_seed = 0;
     clt_settings.par_connections = 2;
     clt_settings.client_mode = 0;
-    clt_settings.session_timeout = DEFAULT_SESSION_TIMEOUT;
+    clt_settings.sess_timeout = DEFAULT_SESSION_TIMEOUT;
     
-#if (GRYPHON_PCAP_SEND)
+#if (TC_PCAP_SEND)
     clt_settings.output_if_name = NULL;
 #endif
 
@@ -748,7 +749,7 @@ main(int argc, char **argv)
 
     settings_init();
 
-#if (GRYPHON_SIGACTION)
+#if (TC_SIGACTION)
     if (set_signal_handler(signals) == -1) {
         return -1;
     }
@@ -777,6 +778,10 @@ main(int argc, char **argv)
     /* output debug info */
     output_for_debug(argc, argv);
 
+    clt_settings.pool = tc_create_pool(TC_DEFAULT_POOL_SIZE, 0);
+    if (clt_settings.pool == NULL) {
+        return -1;
+    }
 
     /* set details for running */
     if (set_details() == -1) {
@@ -794,7 +799,7 @@ main(int argc, char **argv)
     } 
 
     if (is_continue) {
-        ret = tc_build_session_table(65536);
+        ret = tc_build_sess_table(clt_settings.pool, 65536);
         if (ret == TC_ERROR) {
             is_continue = 0;
         } else {

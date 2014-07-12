@@ -33,7 +33,7 @@
 
 #define INTERNAL_EVOLUTION_VERSION 5 
 
-#if (GRYPHON_ADVANCED)
+#if (TC_ADVANCED)
 #define INTERNAL_VERSION (32768 + INTERNAL_EVOLUTION_VERSION)
 #else
 #define INTERNAL_VERSION INTERNAL_EVOLUTION_VERSION
@@ -51,11 +51,9 @@ typedef struct tc_buf_s         tc_buf_t;
 
 #define ETHER_ADDR_LEN 0x6
 
-/* default mtu for output raw socket */
 #define DEFAULT_MTU   1500
 #define DEFAULT_MSS   1460
 #define MAX_FRAME_LENGTH 65550
-/* default listening port for intercept */
 #define SERVER_PORT   36524
 
 #define DEFAULT_CONN_INIT_SP_FACT 1024
@@ -93,14 +91,9 @@ typedef struct tc_buf_s         tc_buf_t;
 
 #define MAX_ALLOWED_IP_NUM 32
 
-/* constants for netlink protocol */
-#define FIREWALL_GROUP  0
-
-/* route flags */
 #define  CLIENT_ADD   1
 #define  CLIENT_DEL   2
 
-/* where is packet from (source flag) */
 #define UNKNOWN 0
 #define REMOTE  1
 #define LOCAL   2
@@ -109,7 +102,6 @@ typedef struct tc_buf_s         tc_buf_t;
 #define CHECK_SRC  2
 
 
-/* constants for tcp */
 #define TCP_HEADER_DOFF_MIN_VALUE 5
 #define TCP_HEADER_DOFF_MSS_VALUE 6
 #define TCP_HEADER_DOFF_TS_VALUE 8
@@ -123,8 +115,9 @@ typedef struct tcphdr tc_tcp_header_t;
 
 /* 
  * the 40 bytes available for TCP options 
+ * we support 24 bytes for TCP options
  */
-#define MAX_OPTION_LEN 40
+#define MAX_OPTION_LEN 24
 #define TCPOPT_WSCALE 3
 
 #define RESP_HEADER_SIZE (sizeof(tc_ip_header_t) + sizeof(tc_tcp_header_t) + MAX_OPTION_LEN)
@@ -139,7 +132,7 @@ typedef struct tcphdr tc_tcp_header_t;
 #define true 1
 #endif /* HAVE_STDBOOL_H */ 
 
-enum session_status{
+enum sess_status{
     CLOSED            = 0,
     SYN_SENT          = 1,
     SYN_CONFIRM       = 2,

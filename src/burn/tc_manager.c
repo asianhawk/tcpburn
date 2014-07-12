@@ -58,7 +58,7 @@ burn_release_resources()
         tc_raw_socket_out = -1;
     }
 
-#if (GRYPHON_PCAP_SEND)
+#if (TC_PCAP_SEND)
     tc_pcap_over();
 #endif
 

@@ -85,7 +85,7 @@ tc_log_info(int level, int err, const char *fmt, ...)
         return;
     }
 
-#if (GRYPHON_DEBUG)
+#if (TC_DEBUG)
     tc_time_update();
 #endif
 

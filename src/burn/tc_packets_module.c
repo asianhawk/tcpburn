@@ -4,7 +4,7 @@
 
 static time_t         read_pcap_over_time;
 static uint64_t       adj_v_pack_diff = 0;
-static uint64_t       session_created = 0;
+static uint64_t       sess_created = 0;
 static uint64_t       packets_considered_cnt = 0;
 static uint64_t       packets_cnt = 0;
 static struct timeval first_pack_time, last_v_pack_time,
@@ -31,7 +31,7 @@ static unsigned char *alloc_pool_mem(int length)
     return p;
 }
 
-static void append_by_order(session_data_t *s, frame_t *added_frame)
+static void append_by_order(sess_data_t *s, frame_t *added_frame)
 {
     bool     last_changed = true;
     frame_t *next, *node;
@@ -69,10 +69,10 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
         uint16_t cont_len, int status)
 {
     frame_t        *fr = NULL;
-    session_data_t *session = NULL;
-    p_session_entry entry   = NULL;
+    sess_data_t *session = NULL;
+    p_sess_entry entry   = NULL;
 
-    entry = tc_retrieve_session(key);
+    entry = tc_retrieve_sess(key);
 
     if (status == SYN_SENT) {
         tc_log_debug1(LOG_DEBUG, 0, "reuse port:%llu", ntohs(src_port));
@@ -97,12 +97,12 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
         fr->frame_len = frame_len;
 
         fr->seq = seq;
-        entry = (p_session_entry) alloc_pool_mem(sizeof(session_entry_t));
+        entry = (p_sess_entry) alloc_pool_mem(sizeof(sess_entry_t));
         if (entry == NULL) {
-            tc_log_info(LOG_WARN, 0, "calloc error for session_entry_t");
+            tc_log_info(LOG_WARN, 0, "calloc error for sess_entry_t");
             return;
         }
-        session_created++;
+        sess_created++;
         entry->key = key;
         session = &(entry->data);
 
@@ -112,7 +112,7 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
         session->last_ack_seq = ack_seq;
         session->orig_src_port = src_port;
         session->status = SYN_SENT;
-        tc_add_session(entry);
+        tc_add_sess(entry);
 
     } else {
 
@@ -217,14 +217,14 @@ dispose_packet(unsigned char *frame, int frame_len, int ip_recv_len)
         return TC_ERROR;
     }
 
-#if (GRYPHON_DEBUG)
+#if (TC_DEBUG)
     tc_log_trace(LOG_NOTICE, 0, CLIENT_FLAG, ip_header, tcp_header);
 #endif
     if (tcp_header->syn) {
         status = SYN_SENT;
     } else if (tcp_header->fin || tcp_header->rst) {
         status = CLIENT_FIN;
-#if (GRYPHON_COMET)
+#if (TC_COMET)
         saved = false;
 #endif
     } 
@@ -295,11 +295,11 @@ dispose_packet(unsigned char *frame, int frame_len, int ip_recv_len)
 int
 tc_send_init(tc_event_loop_t *event_loop)
 {
-#if (!GRYPHON_PCAP_SEND)
+#if (!TC_PCAP_SEND)
     int  fd;
 #endif
 
-#if (!GRYPHON_PCAP_SEND)
+#if (!TC_PCAP_SEND)
     /* init the raw socket to send */
     if ((fd = tc_raw_socket_out_init()) == TC_INVALID_SOCKET) {
         return TC_ERROR;
@@ -490,7 +490,7 @@ calculate_mem_pool_size(char *pcap_file, char *filter)
                     }
 
                     if (tcp_header->syn) {
-                        clt_settings.mem_pool_size += sizeof(session_entry_t);
+                        clt_settings.mem_pool_size += sizeof(sess_entry_t);
                     } 
                     clt_settings.mem_pool_size += pkt_hdr.len + sizeof(frame_t);
                 }

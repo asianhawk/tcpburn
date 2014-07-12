@@ -5,12 +5,12 @@ int tc_select_create(tc_event_loop_t *loop)
     tc_event_t               **evs;
     tc_select_multiplex_io_t  *io;
 
-    evs = malloc(loop->size * sizeof(tc_event_t *));
+    evs = tc_palloc(loop->pool, loop->size * sizeof(tc_event_t *));
     if (evs == NULL) {
         return TC_EVENT_ERROR;
     }
 
-    io = malloc(sizeof(tc_select_multiplex_io_t));
+    io = tc_palloc(loop->pool, sizeof(tc_select_multiplex_io_t));
     if (io == NULL) {
         free(evs);
         return TC_EVENT_ERROR;

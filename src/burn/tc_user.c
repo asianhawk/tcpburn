@@ -27,7 +27,7 @@ static uint64_t orig_clt_packs_cnt = 0;
 
 static tc_user_index_t  *user_index_array = NULL;
 static tc_user_t        *user_array       = NULL;
-static session_table_t  *s_table          = NULL;
+static sess_table_t  *s_table          = NULL;
 
 static void send_faked_rst(tc_user_t *u);
 
@@ -54,21 +54,20 @@ static uint32_t table_index(uint32_t h, uint32_t len)
 }
 
 int 
-tc_build_session_table(int size)
+tc_build_sess_table(tc_pool_t *pool, int size)
 {
-    s_table = (session_table_t *) calloc(1, sizeof(session_table_t));
+    s_table = (sess_table_t *) tc_pcalloc(pool, sizeof(sess_table_t));
     if (s_table == NULL) {
-        tc_log_info(LOG_WARN, 0, "calloc error for session table");
+        tc_log_info(LOG_WARN, 0, "calloc error for sess table");
         return TC_ERROR;
     }
 
     s_table->size = size;
-    s_table->entries = (p_session_entry *) calloc(size, sizeof(p_session_entry));
+    s_table->entries = (p_sess_entry *) tc_pcalloc(pool, 
+            size * sizeof(p_sess_entry));
 
     if (s_table->entries == NULL) {
-        tc_log_info(LOG_WARN, 0, "calloc error for session entries");
-        free(s_table);
-        s_table = NULL;
+        tc_log_info(LOG_WARN, 0, "calloc error for sess entries");
         return TC_ERROR;
     }
 
@@ -85,11 +84,11 @@ tc_get_key(uint32_t ip, uint16_t port)
 }
 
 void 
-tc_add_session(p_session_entry entry)
+tc_add_sess(p_sess_entry entry)
 {
     uint32_t h = supplemental_hash((uint32_t) entry->key);
     uint32_t index = table_index(h, s_table->size);
-    p_session_entry e = NULL, last = NULL;
+    p_sess_entry e = NULL, last = NULL;
 
     for(e = s_table->entries[index]; e != NULL; e = e->next) { 
         last = e;
@@ -101,29 +100,33 @@ tc_add_session(p_session_entry entry)
         last->next = entry;
     }
 
-    s_table->num_of_sessions++;
-    tc_log_debug2(LOG_DEBUG, 0, "index:%d,sessions in table:%d",
-            index, s_table->num_of_sessions);
+    s_table->num_of_sess++;
+    tc_log_debug2(LOG_DEBUG, 0, "index:%d,sess in table:%d",
+            index, s_table->num_of_sess);
 
 }
 
 static void
-tc_init_session_for_users()
+tc_init_sess_for_users()
 {
     bool            is_find = false;
     int             i, index = 0;
     tc_user_t      *u;
-    p_session_entry e = NULL, *aux_s_array;
-    session_data_t *sess;
+    tc_pool_t      *pool;
+    sess_data_t    *sess;
+    p_sess_entry    e = NULL, *aux_s_array;
 
-    if (s_table->num_of_sessions == 0) {
-        tc_log_info(LOG_ERR, 0, "no sessions for replay");
+    if (s_table->num_of_sess == 0) {
+        tc_log_info(LOG_ERR, 0, "no sess for replay");
         tc_over = 1;
         return;
     }
 
-    aux_s_array = (p_session_entry *) calloc(s_table->num_of_sessions, 
-            sizeof(p_session_entry));
+    pool = tc_create_pool(TC_DEFAULT_POOL_SIZE, 0);
+
+    aux_s_array = (p_sess_entry *) tc_pcalloc(pool, 
+            s_table->num_of_sess * sizeof(p_sess_entry));
+
     if (aux_s_array == NULL) {
         tc_log_info(LOG_ERR, 0, "calloc error for aux_s_array");
         tc_over = 1;
@@ -132,7 +135,7 @@ tc_init_session_for_users()
 
     e = s_table->entries[index];
 
-    for (i = 0; i < s_table->num_of_sessions; i++) {
+    for (i = 0; i < s_table->num_of_sess; i++) {
         if (e == NULL) {
             is_find = false;
             do {
@@ -170,28 +173,29 @@ tc_init_session_for_users()
     for (i = 0; i < size_of_users; i++) {
         e = aux_s_array[index];
         u = user_array + i;
-        u->orig_session = &(e->data);
-        u->orig_frame = u->orig_session->first_frame;
-        u->orig_unack_frame = u->orig_session->first_frame;
-        orig_clt_packs_cnt += u->orig_session->frames;
+        u->orig_sess = &(e->data);
+        u->orig_frame = u->orig_sess->first_frame;
+        u->orig_unack_frame = u->orig_sess->first_frame;
+        orig_clt_packs_cnt += u->orig_sess->frames;
         tc_log_debug3(LOG_DEBUG, 0, "index:%d,frames:%u, orig src port:%u", 
-                index, u->orig_session->frames, 
-                ntohs(u->orig_session->orig_src_port));
-        index = (index + 1) % s_table->num_of_sessions;
+                index, u->orig_sess->frames, 
+                ntohs(u->orig_sess->orig_src_port));
+        index = (index + 1) % s_table->num_of_sess;
     }
 
     tc_log_info(LOG_NOTICE, 0, 
-            "users:%d, sessions:%d, total packets needed sent:%llu",
-            size_of_users, s_table->num_of_sessions, orig_clt_packs_cnt);
-    free(aux_s_array);
+            "users:%d, sess:%d, total packets needed sent:%llu",
+            size_of_users, s_table->num_of_sess, orig_clt_packs_cnt);
+
+    tc_destroy_pool(pool);
 }
 
-p_session_entry 
-tc_retrieve_session(uint64_t key)
+p_sess_entry 
+tc_retrieve_sess(uint64_t key)
 {
     uint32_t h = supplemental_hash((uint32_t) key);
     uint32_t index = table_index(h, s_table->size);
-    p_session_entry e = NULL, last = NULL;
+    p_sess_entry e = NULL, last = NULL;
 
     for(e = s_table->entries[index]; e != NULL; e = e->next) { 
         if (e->key == key) {   
@@ -294,13 +298,20 @@ static uint16_t get_port(int default_port)
 bool 
 tc_build_users(int port_prioritized, int num_users, uint32_t *ips, int num_ip)
 {
-    int       i, j, k, count, sub_key, slot_avg,
-             *stat, *accum, *slot_cnt, *sub_keys;
-    uint16_t *buf_ports, port;
-    uint32_t  ip, *buf_ips;
-    uint64_t  key, *keys;
+    int         i, j, k, count, sub_key, slot_avg,
+               *stat, *accum, *slot_cnt, *sub_keys;
+    uint16_t   *buf_ports, port;
+    uint32_t    ip, *buf_ips;
+    uint64_t    key, *keys;
+    tc_pool_t  *pool;
     
     tc_log_info(LOG_INFO, 0, "enter tc_build_users");
+
+    pool = tc_create_pool(TC_DEFAULT_POOL_SIZE, 0);
+
+    if (pool == NULL) {
+        return false;
+    }
 
     size_of_users = num_users;
 
@@ -311,35 +322,63 @@ tc_build_users(int port_prioritized, int num_users, uint32_t *ips, int num_ip)
 
     size_of_user_index = size_of_users / slot_avg;
 
-    user_array = (tc_user_t *) calloc (size_of_users, sizeof (tc_user_t));
-    user_index_array = (tc_user_index_t *) calloc (size_of_user_index, 
-            sizeof(tc_user_index_t));
-    if (user_index_array == NULL || user_array == NULL) {
+    user_array = (tc_user_t *) tc_pcalloc (pool, 
+            size_of_users * sizeof (tc_user_t));
+    if (user_array == NULL) {
         tc_log_info(LOG_WARN, 0, "calloc error for users");
+        tc_destroy_pool(pool);
+        return false;
+    }
+
+    user_index_array = (tc_user_index_t *) tc_pcalloc (pool, 
+            size_of_user_index * sizeof(tc_user_index_t));
+
+    if (user_array == NULL) {
+        tc_log_info(LOG_WARN, 0, "calloc error for users");
+        tc_destroy_pool(pool);
         return false;
     }
 
     count     = 0;
-    keys      = (uint64_t *) malloc (sizeof(uint64_t) * size_of_users);
-    sub_keys  = (int *) malloc (sizeof(int) * size_of_users);
-    buf_ips   = (uint32_t *) malloc (sizeof(uint32_t) * size_of_users);
-    buf_ports = (uint16_t *) malloc (sizeof(uint16_t) * size_of_users);
-    accum     = (int *) malloc (sizeof(int) * size_of_users);
-    stat      = (int *) malloc (sizeof(int) * size_of_user_index);
-    slot_cnt  = (int *) malloc (sizeof(int) * size_of_user_index);
+    keys      = (uint64_t *) tc_palloc (pool, sizeof(uint64_t) * size_of_users);
+    if (keys == NULL) {
+        tc_destroy_pool(pool);
+        return false;
+    }
 
-    if (keys == NULL || sub_keys == NULL || buf_ips == NULL || 
-            buf_ports == NULL || accum == NULL || stat == NULL 
-            || slot_cnt == NULL) 
-    {
-        free(keys);
-        free(sub_keys);
-        free(buf_ips);
-        free(buf_ports);
-        free(accum);
-        free(stat);
-        free(slot_cnt);
-        tc_log_info(LOG_WARN, 0, "calloc error for building users");
+    sub_keys  = (int *) tc_palloc (pool, sizeof(int) * size_of_users);
+    if (sub_keys == NULL) {
+        tc_destroy_pool(pool);
+        return false;
+    }
+
+    buf_ips   = (uint32_t *) tc_palloc (pool, sizeof(uint32_t) * size_of_users);
+    if (buf_ips == NULL) {
+        tc_destroy_pool(pool);
+        return false;
+    }
+
+    buf_ports = (uint16_t *) tc_palloc (pool, sizeof(uint16_t) * size_of_users);
+    if (buf_ports == NULL) {
+        tc_destroy_pool(pool);
+        return false;
+    }
+
+    accum = (int *) tc_palloc (pool, sizeof(int) * size_of_users);
+    if (accum == NULL) {
+        tc_destroy_pool(pool);
+        return false;
+    }
+    
+    stat = (int *) tc_palloc (pool, sizeof(int) * size_of_user_index);
+    if (stat == NULL) {
+        tc_destroy_pool(pool);
+        return false;
+    }
+
+    slot_cnt  = (int *) tc_palloc (pool, sizeof(int) * size_of_user_index);
+    if (slot_cnt == NULL) {
+        tc_destroy_pool(pool);
         return false;
     }
 
@@ -424,15 +463,9 @@ tc_build_users(int port_prioritized, int num_users, uint32_t *ips, int num_ip)
         slot_cnt[sub_key]++;
     }
 
-    free(sub_keys);
-    free(buf_ports);
-    free(buf_ips);
-    free(accum);
-    free(stat);
-    free(keys);
-    free(slot_cnt);
+    tc_destroy_pool(pool);
 
-    tc_init_session_for_users();
+    tc_init_sess_for_users();
 
     tc_log_info(LOG_INFO, 0, "leave tc_build_users");
 
@@ -507,7 +540,7 @@ static bool send_stop(tc_user_t *u)
     return false;
 }
 
-#if (!GRYPHON_SINGLE)
+#if (!TC_SINGLE)
 static bool
 send_router_info(tc_user_t *u, uint16_t type)
 {
@@ -628,7 +661,7 @@ update_timestamp(tc_user_t *u, tc_tcp_header_t *tcp_header)
     return;
 }
 
-#if (GRYPHON_PCAP_SEND)
+#if (TC_PCAP_SEND)
 static void
 fill_frame(struct ethernet_hdr *hdr, unsigned char *smac, unsigned char *dmac)
 {
@@ -665,7 +698,7 @@ static bool process_packet(tc_user_t *u, unsigned char *frame)
         }
         u->dst_addr = test->target_ip;
         u->dst_port = test->target_port;
-#if (GRYPHON_PCAP_SEND)
+#if (TC_PCAP_SEND)
         u->src_mac       = test->src_mac;
         u->dst_mac       = test->dst_mac;
 #endif
@@ -699,7 +732,7 @@ static bool process_packet(tc_user_t *u, unsigned char *frame)
     packs_sent_cnt++;
     if (tcp_header->syn) {
         syn_sent_cnt++;
-#if (!GRYPHON_SINGLE)
+#if (!TC_SINGLE)
         if (!send_router_info(u, CLIENT_ADD)) {
             return false;
         }
@@ -727,13 +760,13 @@ static bool process_packet(tc_user_t *u, unsigned char *frame)
     tcp_header->check = 0;
     tcp_header->check = tcpcsum((unsigned char *) ip_header,
             (unsigned short *) tcp_header, (int) (tot_len - size_ip));
-#if (GRYPHON_PCAP_SEND)
+#if (TC_PCAP_SEND)
     ip_header->check = 0;
     ip_header->check = csum((unsigned short *) ip_header,size_ip);
 #endif
     tc_log_debug_trace(LOG_DEBUG, 0, TO_BAKEND_FLAG, ip_header, tcp_header);
 
-#if (!GRYPHON_PCAP_SEND)
+#if (!TC_PCAP_SEND)
     result = tc_raw_socket_send(tc_raw_socket_out, ip_header, tot_len,
             ip_header->daddr);
 #else
@@ -934,7 +967,7 @@ update_ack_packets(tc_user_t *u, uint32_t cur_ack_seq)
                         ntohs(u->src_port));
                 unack_frame = next;
                 next = unack_frame->next;
-                if (unack_frame == u->orig_session->last_frame) {
+                if (unack_frame == u->orig_sess->last_frame) {
                     break;
                 }
             }
@@ -1118,7 +1151,7 @@ void process_outgress(unsigned char *packet)
             if (u->state.status & CLIENT_FIN) {
                 u->state.over = 1;
             } else {
-#if (GRYPHON_COMET)
+#if (TC_COMET)
                 send_faked_rst(u);
 #else
                 if (u->orig_frame == NULL) {
@@ -1147,7 +1180,7 @@ void process_outgress(unsigned char *packet)
     } else {
         tc_log_debug_trace(LOG_DEBUG, 0, BACKEND_FLAG, ip_header,
                 tcp_header);
-        tc_log_debug0(LOG_DEBUG, 0, "no active session for me");
+        tc_log_debug0(LOG_DEBUG, 0, "no active sess for me");
     }
 
 }
@@ -1156,7 +1189,7 @@ void process_outgress(unsigned char *packet)
 static void 
 check_replay_complete()
 {
-#if (!GRYPHON_COMET)
+#if (!TC_COMET)
     int  diff;
 
     if (last_resp_time) {
@@ -1221,13 +1254,13 @@ release_user_resources()
     int                 i, rst_send_cnt = 0, valid_sess = 0;
     frame_t            *fr;
     tc_user_t          *u;
-    p_session_entry     e;
+    p_sess_entry     e;
     struct sockaddr_in  targ_addr;
 
     memset(&targ_addr, 0, sizeof(targ_addr));
     targ_addr.sin_family = AF_INET;
 
-    if (s_table && s_table->num_of_sessions > 0) {
+    if (s_table && s_table->num_of_sess > 0) {
         if (user_array) {
             for (i = 0; i < size_of_users; i++) {
                 u = user_array + i;
@@ -1236,10 +1269,10 @@ release_user_resources()
                     tc_log_info(LOG_NOTICE, 0, "connection fails:%s:%u", 
                             inet_ntoa(targ_addr.sin_addr), ntohs(u->src_port));
                 }
-                if (u->total_packets_sent < u->orig_session->frames) {
+                if (u->total_packets_sent < u->orig_sess->frames) {
                     tc_log_debug3(LOG_DEBUG, 0, 
                             "total sent frames:%u, total:%u, p:%u", 
-                            u->total_packets_sent, u->orig_session->frames, 
+                            u->total_packets_sent, u->orig_sess->frames, 
                             ntohs(u->src_port));
                 }
                 if (u->state.status && !u->state.over) {
@@ -1265,7 +1298,7 @@ release_user_resources()
             }
         }
 
-        tc_log_info(LOG_NOTICE, 0, "valid sessions:%d", valid_sess);
+        tc_log_info(LOG_NOTICE, 0, "valid sess:%d", valid_sess);
         free(s_table->entries);
         free(s_table);
     }

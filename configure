@@ -51,6 +51,10 @@ else
     fi
 fi
 
+if [ $TC_COMET = YES ]; then
+    have=TC_COMET . auto/have
+fi
+
 if [ $TC_SINGLE = YES ]; then
     have=TC_SINGLE . auto/have
 fi
@@ -75,7 +79,7 @@ fi
 
 case ".$TC_PREFIX" in
     .)
-        TC_PREFIX=${TC_PREFIX:-/usr/local/tcpburst}
+        TC_PREFIX=${TC_PREFIX:-/usr/local/tcpburn}
         have=TC_PREFIX value="\"$TC_PREFIX/\"" . auto/define
     ;;
 

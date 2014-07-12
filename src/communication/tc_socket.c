@@ -34,7 +34,7 @@ tc_raw_socket_out_init()
     return fd;
 }
 
-#if (GRYPHON_PCAP_SEND)
+#if (TC_PCAP_SEND)
 
 static pcap_t *pcap = NULL;
 

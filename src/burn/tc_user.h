@@ -14,7 +14,7 @@ typedef struct frame_s {
     unsigned char  *frame_data;
 }frame_t;
 
-typedef struct session_data_s {
+typedef struct sess_data_s {
     frame_t *first_frame;
     frame_t *last_frame;
     uint32_t last_ack_seq;
@@ -23,19 +23,19 @@ typedef struct session_data_s {
     unsigned int end:1;
     unsigned int has_req:1;
     unsigned int status:16;
-}session_data_t, *p_session_data_t;
+}sess_data_t, *p_sess_data_t;
 
-typedef struct session_entry_s{
+typedef struct sess_entry_s{
     uint64_t key;
-    session_data_t data;
-    struct session_entry_s* next;
-}session_entry_t,*p_session_entry;
+    sess_data_t data;
+    struct sess_entry_s* next;
+}sess_entry_t,*p_sess_entry;
 
-typedef struct session_table_s{                                                                           
+typedef struct sess_table_s{                                                                           
     int size;
-    int num_of_sessions;
-    p_session_entry* entries;
-}session_table_t;
+    int num_of_sess;
+    p_sess_entry* entries;
+}sess_table_t;
 
 typedef struct tc_user_state_s{
     uint32_t status:16;
@@ -76,12 +76,12 @@ typedef struct tc_user_s {
     uint32_t srv_window;
     uint32_t total_packets_sent;
 
-#if (GRYPHON_PCAP_SEND)
+#if (TC_PCAP_SEND)
     unsigned char *src_mac;
     unsigned char *dst_mac;
 #endif
 
-    session_data_t *orig_session;
+    sess_data_t *orig_sess;
     frame_t        *orig_frame;
     frame_t        *orig_unack_frame;
 
@@ -95,14 +95,14 @@ typedef struct tc_user_index_s {
 }tc_user_index_t;
 
 
-int tc_build_session_table(int size);
+int tc_build_sess_table(tc_pool_t *pool, int size);
 bool tc_build_users(int port_prioritized, int num_users, uint32_t *ips,
         int num_ip);
 
 uint64_t tc_get_key(uint32_t ip, uint16_t port);
 tc_user_t *tc_retrieve_user(uint64_t key);
-void tc_add_session(p_session_entry entry);
-p_session_entry tc_retrieve_session(uint64_t key);
+void tc_add_sess(p_sess_entry entry);
+p_sess_entry tc_retrieve_sess(uint64_t key);
 
 void process_outgress(unsigned char *packet);
 void process_ingress();
