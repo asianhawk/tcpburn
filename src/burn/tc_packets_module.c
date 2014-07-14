@@ -107,6 +107,7 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
         
         session = &(entry->data);
 
+        session->last_pcap_time = clt_settings.pcap_time;
         session->rtt = clt_settings.pcap_time;
         session->rtt_init = 1;
         session->first_frame = fr;
@@ -166,6 +167,15 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
             fr->seq = seq;
 
             append_by_order(session, fr);
+
+            if (clt_settings.pcap_time > session->last_pcap_time) {
+                fr->time_diff = clt_settings.pcap_time - session->last_pcap_time;
+            } else {
+                fr->time_diff = 0;
+            }
+
+            session->last_pcap_time = clt_settings.pcap_time;
+
             if (session->last_ack_seq == ack_seq && cont_len > 0) {
                 fr->belong_to_the_same_req = 1;
                 tc_log_debug1(LOG_DEBUG, 0, "belong to the same req:%u", ntohs(src_port));

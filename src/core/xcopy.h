@@ -107,8 +107,7 @@ typedef struct tc_buf_s         tc_buf_t;
 #define TYPE_RTO 2
 #define TYPE_ACT 3
 
-#define DEFAULT_RTO 200
-#define DEFAULT_ACTIVATE_TIMEOUT 3000
+#define DEFAULT_RTO 100
 
 #define TCP_HEADER_DOFF_MIN_VALUE 5
 #define TCP_HEADER_DOFF_MSS_VALUE 6

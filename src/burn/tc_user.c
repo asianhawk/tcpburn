@@ -715,8 +715,8 @@ tc_lantency_ctl(tc_event_timer_t *ev)
             }
         }    
 
-        if (!timer_set) {
-            utimer_disp(u, DEFAULT_ACTIVATE_TIMEOUT, TYPE_ACT);
+        if (!timer_set && u->orig_frame != NULL) {
+            utimer_disp(u, u->orig_frame->time_diff, TYPE_ACT);
         }
 
     } else {

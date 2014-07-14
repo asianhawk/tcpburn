@@ -5,18 +5,20 @@
 #include <burn.h>
 
 typedef struct frame_s {
-    uint64_t interval;
-    uint32_t seq;
     struct frame_s *next;
     struct frame_s *prev;
+    unsigned char  *frame_data;
+    uint64_t        interval;
+    uint32_t        seq;
     unsigned int    belong_to_the_same_req:1;
     unsigned int    frame_len:17;
-    unsigned char  *frame_data;
+    unsigned int    time_diff:14;
 }frame_t;
 
 typedef struct sess_data_s {
     frame_t *first_frame;
     frame_t *last_frame;
+    long     last_pcap_time;
     uint32_t last_ack_seq;
     uint32_t frames;
     unsigned int rtt_init:1;
