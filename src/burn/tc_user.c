@@ -16,7 +16,11 @@ static tc_user_index_t  *user_index_array = NULL;
 static tc_user_t        *user_array       = NULL;
 static sess_table_t     *s_table          = NULL;
 
+static void utimer_disp(tc_user_t *u, int lty, int type);
+static bool process_user_packet(tc_user_t *u);
+static void send_faked_ack(tc_user_t *u);
 static void send_faked_rst(tc_user_t *u);
+static void retransmit(tc_user_t *u, uint32_t cur_ack_seq);
 
 static uint32_t 
 supplemental_hash(uint32_t value)                                                                 
@@ -171,11 +175,9 @@ tc_init_sess_for_users()
         u = user_array + i;
         u->orig_sess = &(e->data);
         u->orig_frame = u->orig_sess->first_frame;
+        u->rtt = u->orig_sess->rtt;
         u->orig_unack_frame = u->orig_sess->first_frame;
         tc_stat.orig_clt_packs_cnt += u->orig_sess->frames;
-        tc_log_debug3(LOG_DEBUG, 0, "index:%d,frames:%u, orig src port:%u", 
-                index, u->orig_sess->frames, 
-                ntohs(u->orig_sess->orig_src_port));
         index = (index + 1) % s_table->num_of_sess;
     }
 
@@ -222,8 +224,7 @@ tc_retrieve_active_user()
         if (total >= size_of_users) {
            tc_log_info(LOG_NOTICE, 0, "total is larger than size of users");
            init_phase = false;
-           u = user_array + 0;
-           base_user_seq = 1 % size_of_users;
+           return NULL;
         } else {
             u = user_array + total;
             speed = clt_settings.conn_init_sp_fact;
@@ -241,14 +242,12 @@ tc_retrieve_active_user()
                     }
                 }
             }
-        }
-      
-    } else {
-        u = user_array + base_user_seq;
-        base_user_seq = (base_user_seq + 1) % size_of_users;
-    }
 
-    return u;
+            return u;
+        }
+    } else {
+        return NULL;
+    }
 }
 
 
@@ -678,6 +677,71 @@ fill_frame(struct ethernet_hdr *hdr, unsigned char *smac, unsigned char *dmac)
 #endif
 
 
+static void
+tc_delay_ack(tc_user_t *u, tc_event_timer_t *ev)
+{
+    send_faked_ack(u); 
+}
+
+
+static void 
+tc_lantency_ctl(tc_event_timer_t *ev) 
+{
+    bool       timer_set = false;
+    tc_user_t *u = ev->data;
+
+    if (u != NULL) {
+        tc_log_debug1(LOG_INFO, 0, "timer type:%u", u->state.timer_type); 
+        if (u->state.timer_type == TYPE_DELAY_ACK) {
+            if (u->state.sess_continue) {
+                process_user_packet(u);
+                u->state.sess_continue = 0;
+            } else {
+                tc_delay_ack(u, ev); 
+            }
+        } else if (u->state.timer_type == TYPE_ACT) {
+            process_user_packet(u);
+        } else if (u->state.timer_type == TYPE_RTO) {
+            if (u->state.snd_after_set_rto) {
+                utimer_disp(u, DEFAULT_RTO, TYPE_RTO);
+                u->state.snd_after_set_rto = 0;
+                timer_set = true;
+            } else {
+                u->state.set_rto = 0;
+                if (before(u->last_ack_seq, u->exp_seq)) {
+                    retransmit(u, u->last_ack_seq);
+                    tc_log_debug1(LOG_INFO, 0, "rto:%llu", ntohs(u->src_port));
+                }    
+            }
+        }    
+
+        if (!timer_set) {
+            utimer_disp(u, DEFAULT_ACTIVATE_TIMEOUT, TYPE_ACT);
+        }
+
+    } else {
+        tc_log_info(LOG_ERR, 0, "sesson already deleted:%llu", ev); 
+    }    
+}
+
+
+static void
+utimer_disp(tc_user_t *u, int lty, int type)
+{
+    int timeout = lty > 0 ? lty:1;
+
+    if (u->state.evt_added) {
+        if (tc_event_update_timer(&u->ev, timeout)) {
+            u->state.timer_type = type;
+        }
+    } else {
+        u->state.evt_added = 1;
+        tc_event_add_timer(NULL, &u->ev, timeout, u, tc_lantency_ctl);
+        u->state.timer_type = type;
+    }    
+}
+
+
 static bool 
 process_packet(tc_user_t *u, unsigned char *frame) 
 {
@@ -694,6 +758,8 @@ process_packet(tc_user_t *u, unsigned char *frame)
     size_tcp = tcp_header->doff << 2;
     tot_len  = ntohs(ip_header->tot_len);
     cont_len = tot_len - size_tcp - size_ip;
+
+    u->exp_seq = ntohl(tcp_header->seq);
 
     if (u->dst_port == 0) {
         test = get_test_pair(&(clt_settings.transfer), 
@@ -723,7 +789,6 @@ process_packet(tc_user_t *u, unsigned char *frame)
                 return false;
             }
         }
-
     }
 
     ip_header->saddr = u->src_addr;
@@ -760,6 +825,14 @@ process_packet(tc_user_t *u, unsigned char *frame)
     if (cont_len > 0) {
         tc_stat.cont_sent_cnt++;
         u->state.status |= SEND_REQ;
+        u->exp_seq = u->exp_seq + cont_len;
+        if (u->state.set_rto) {
+            u->state.snd_after_set_rto = 1; 
+        } else {
+            utimer_disp(u, DEFAULT_RTO, TYPE_RTO);
+            u->state.set_rto = 1; 
+            u->state.snd_after_set_rto = 0; 
+        }  
     }
     if (u->state.timestamped) {
         update_timestamp(u, tcp_header);
@@ -798,12 +871,12 @@ process_packet(tc_user_t *u, unsigned char *frame)
 
 
 static
-void process_user_packet(tc_user_t *u)
+bool process_user_packet(tc_user_t *u)
 {
     unsigned char   frame[MAX_FRAME_LENGTH];
 
     if (send_stop(u)) {
-        return;
+        return false;
     }
 
     while (true) {
@@ -835,6 +908,8 @@ void process_user_packet(tc_user_t *u)
             tc_log_debug1(LOG_DEBUG, 0, "the same req:%u",  ntohs(u->src_port));
         }
     }
+
+    return true;
 }
 
 
@@ -860,7 +935,7 @@ send_faked_rst(tc_user_t *u)
     ip_header->daddr    = u->dst_addr;
     tcp_header->source  = u->src_port;
     tcp_header->dest    = u->dst_port;
-    tcp_header->seq     = u->exp_seq;
+    tcp_header->seq     = htonl(u->last_ack_seq);
     tcp_header->ack_seq = u->exp_ack_seq;
     tcp_header->window  = 65535; 
     tcp_header->ack     = 1;
@@ -892,7 +967,7 @@ send_faked_ack(tc_user_t *u)
     ip_header->daddr    = u->dst_addr;
     tcp_header->source  = u->src_port;
     tcp_header->dest    = u->dst_port;
-    tcp_header->seq     = u->exp_seq;
+    tcp_header->seq     = htonl(u->last_ack_seq);
     tcp_header->ack_seq = u->exp_ack_seq;
     tcp_header->window  = 65535; 
     tcp_header->ack     = 1;
@@ -1080,7 +1155,6 @@ process_outgress(unsigned char *packet)
     size_ip    = ip_header->ihl << 2;
     tcp_header = (tc_tcp_header_t *) ((char *) ip_header + size_ip);
 
-
     key = tc_get_key(ip_header->daddr, tcp_header->dest);
     tc_log_debug1(LOG_DEBUG, 0, "key from bak:%llu", key);
     u = tc_retrieve_user(key);
@@ -1101,10 +1175,9 @@ process_outgress(unsigned char *packet)
         cont_len = tot_len - size_tcp - size_ip;
 
         if (ip_header->daddr != u->src_addr || tcp_header->dest!= u->src_port) {
-            tc_log_info(LOG_NOTICE, 0, " key conflict");
+            tc_log_info(LOG_NOTICE, 0, "key conflict");
         }
         seq = ntohl(tcp_header->seq);
-        u->exp_seq = tcp_header->ack_seq;
         ack_seq = ntohl(tcp_header->ack_seq);
 
         if (u->last_seq == seq && u->last_ack_seq == ack_seq) {
@@ -1121,13 +1194,13 @@ process_outgress(unsigned char *packet)
         u->last_ack_seq =  ack_seq;
         u->last_seq =  seq;
 
-
         if (cont_len > 0) {
             u->last_recv_resp_cont_time = tc_milliscond_time();
             tc_stat.resp_cont_cnt++;
             u->state.resp_waiting = 0;   
             u->exp_ack_seq = htonl(seq + cont_len);
-            send_faked_ack(u);
+            utimer_disp(u, u->rtt, TYPE_DELAY_ACK);
+            tc_log_debug1(LOG_INFO, 0, "timer set:%u", ntohs(u->src_port));
         } else {
             u->exp_ack_seq = tcp_header->seq;
         }
@@ -1150,7 +1223,8 @@ process_outgress(unsigned char *packet)
                                 u->wscale, ntohs(u->src_port));
                     }
                 }
-                process_user_packet(u);
+                u->state.sess_continue = 1;
+                utimer_disp(u, u->rtt, TYPE_DELAY_ACK);
 
             } else {
                 send_faked_ack(u);
@@ -1217,29 +1291,37 @@ check_replay_complete()
 }
 
 
-void 
+bool
 process_ingress()
 {
+    bool        result = true;
     tc_user_t  *u = NULL;
 
     u = tc_retrieve_active_user();
 
-    if (!u->state.over) {
-        process_user_packet(u);
-        if ((u->state.status & CLIENT_FIN) && (u->state.status & SERVER_FIN)) {
-            u->state.over = 1;
-        }
-    } else {
-        if (!u->state.over_recorded) {
-            u->state.over_recorded = 1;
-            tc_stat.active_conn_cnt--;
-            if (tc_stat.active_conn_cnt == 0) {
-                tc_over = 1;
+    if (u != NULL) {
+
+        if (!u->state.over) {
+            process_user_packet(u);
+            if ((u->state.status & CLIENT_FIN) && (u->state.status & SERVER_FIN)) {
+                u->state.over = 1;
+            }
+        } else {
+            if (!u->state.over_recorded) {
+                u->state.over_recorded = 1;
+                tc_stat.active_conn_cnt--;
+                if (tc_stat.active_conn_cnt == 0) {
+                    tc_over = 1;
+                }
             }
         }
+    } else {
+        result = false;
     }
     
     check_replay_complete();
+
+    return result;
 }
 
 

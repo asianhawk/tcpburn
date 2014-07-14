@@ -104,13 +104,15 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
         }
         sess_created++;
         entry->key = key;
+        
         session = &(entry->data);
 
+        session->rtt = clt_settings.pcap_time;
+        session->rtt_init = 1;
         session->first_frame = fr;
         session->frames = 1;
         session->last_frame = fr;
         session->last_ack_seq = ack_seq;
-        session->orig_src_port = src_port;
         session->status = SYN_SENT;
         tc_add_sess(entry);
 
@@ -118,6 +120,22 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
 
         session = &(entry->data);
         session->status |= status;
+
+        if (!session->rtt_calculated) {
+            if (session->rtt_init) {
+                if (clt_settings.pcap_time > session->rtt) {
+                    session->rtt = clt_settings.pcap_time - session->rtt;
+                } else {
+                    session->rtt = 1;
+                }
+            } else {
+                tc_log_info(LOG_WARN, 0, "rtt wrong");
+                session->rtt = 1;
+            }
+            session->rtt_calculated = 1;
+            tc_log_info(LOG_INFO, 0, "rtt:%u", session->rtt);
+        }
+
         if (cont_len > 0) {
             session->has_req = 1;
         } else if ((session->status & SEND_REQ) && 
@@ -148,7 +166,7 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
             fr->seq = seq;
 
             append_by_order(session, fr);
-            if (session->last_ack_seq == ack_seq) {
+            if (session->last_ack_seq == ack_seq && cont_len > 0) {
                 fr->belong_to_the_same_req = 1;
                 tc_log_debug1(LOG_DEBUG, 0, "belong to the same req:%u", ntohs(src_port));
             } else {
@@ -311,7 +329,7 @@ tc_send_init(tc_event_loop_t *event_loop)
 #endif
 
     /* register a timer for activating sending packets */
-    tc_event_add_timer(event_loop->pool, 1, NULL, tc_process_packets);
+    tc_event_add_timer(event_loop->pool, NULL, 1, NULL, tc_process_packets);
 
     return TC_OK;
 }
@@ -322,7 +340,9 @@ tc_process_packets(tc_event_timer_t *evt)
     int i = 0;
 
     for (; i < clt_settings.throughput_factor; i++) {
-        process_ingress();
+        if (!process_ingress()) {
+            break;
+        }
     }
 
     tc_event_update_timer(evt, 1);

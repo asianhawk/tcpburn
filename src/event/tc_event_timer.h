@@ -26,7 +26,7 @@ tc_event_del_timer(tc_event_timer_t *ev)
     ev->timer_set = 0;
 }
 
-static inline void
+static inline bool
 tc_event_update_timer(tc_event_timer_t *ev, tc_msec_t timer)
 {
     tc_msec_t         key;
@@ -38,7 +38,11 @@ tc_event_update_timer(tc_event_timer_t *ev, tc_msec_t timer)
         if (ev->timer_set) {
             diff = (tc_msec_int_t) (key - ev->timer.key);
             if (tc_abs(diff) < TC_TIMER_LAZY_DELAY) {
-                return;
+                return false;
+            }
+
+            if (diff > 0) {
+                return false;
             }
             tc_event_del_timer(ev);
         }
@@ -49,21 +53,26 @@ tc_event_update_timer(tc_event_timer_t *ev, tc_msec_t timer)
         tc_rbtree_insert(&tc_event_timer_rbtree, &ev->timer);
 
         ev->timer_set = 1;
+
+        return true;
     } else {
         tc_log_info(LOG_WARN, 0, "ev is null");
+        return false;
     }
 }
 
 static inline tc_event_timer_t* 
-tc_event_add_timer(tc_pool_t *pool, tc_msec_t timer, void *data, 
+tc_event_add_timer(tc_pool_t *pool, tc_event_timer_t *ev, tc_msec_t timer, void *data, 
         tc_event_timer_handler_pt handler)
 {
     tc_msec_t         key;
-    tc_event_timer_t *ev;
 
-    ev = (tc_event_timer_t *) tc_palloc(pool, sizeof(tc_event_timer_t));
-    if (ev != NULL) {
+    if (ev == NULL && pool != NULL) {
+        ev = (tc_event_timer_t *) tc_palloc(pool, sizeof(tc_event_timer_t));
         ev->pool = pool;
+    }
+
+    if (ev != NULL) {
         ev->handler = handler;
         ev->data = data;
         key = ((tc_msec_t) tc_current_time_msec) + timer;
@@ -71,13 +80,10 @@ tc_event_add_timer(tc_pool_t *pool, tc_msec_t timer, void *data,
 
         tc_rbtree_insert(&tc_event_timer_rbtree, &ev->timer);
 
-        tc_log_debug2(LOG_DEBUG, 0, "pool:%llu, add timer:%llu", pool, 
-                &ev->timer); 
-
         ev->timer_set = 1;
     }
+
     return ev;
 }
-
 
 #endif /* _TC_EVENT_TIMER_H_INCLUDED_ */

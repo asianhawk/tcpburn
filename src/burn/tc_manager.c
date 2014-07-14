@@ -5,7 +5,7 @@
 
 /* check resource usage, such as memory usage and cpu usage */
 static void
-check_resource_usage(tc_event_timer_t *evt)
+check_res_usage(tc_event_timer_t *evt)
 {
     int           ret, who;
     struct rusage usage;
@@ -163,7 +163,7 @@ burn_init(tc_event_loop_t *event_loop)
     uint64_t pool_size;
 
     /* register some timer */
-    tc_event_add_timer(event_loop->pool, 60000, NULL, check_resource_usage);
+    tc_event_add_timer(event_loop->pool, NULL, 60000, NULL, check_res_usage);
 
     if (connect_to_server(event_loop) == TC_ERROR) {
         return TC_ERROR;
@@ -199,7 +199,7 @@ burn_init(tc_event_loop_t *event_loop)
 
     tc_log_info(LOG_NOTICE, 0, "pool used:%llu", clt_settings.mem_pool_index);
 
-    tc_event_add_timer(event_loop->pool, 5000, NULL, tc_interval_dispose);
+    tc_event_add_timer(event_loop->pool, NULL, 5000, NULL, tc_interval_dispose);
 
     return TC_OK;
 }

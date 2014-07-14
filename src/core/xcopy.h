@@ -1,6 +1,7 @@
 #ifndef  XCOPY_H_INCLUDED
 #define  XCOPY_H_INCLUDED
 
+#include <tc_auto_config.h>
 #include <limits.h>
 #include <asm/types.h>
 #include <stdarg.h>
@@ -101,6 +102,13 @@ typedef struct tc_buf_s         tc_buf_t;
 #define CHECK_DEST 1
 #define CHECK_SRC  2
 
+#define TYPE_DEFAULT 0
+#define TYPE_DELAY_ACK 1
+#define TYPE_RTO 2
+#define TYPE_ACT 3
+
+#define DEFAULT_RTO 200
+#define DEFAULT_ACTIVATE_TIMEOUT 3000
 
 #define TCP_HEADER_DOFF_MIN_VALUE 5
 #define TCP_HEADER_DOFF_MSS_VALUE 6

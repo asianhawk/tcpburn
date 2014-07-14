@@ -19,10 +19,12 @@ typedef struct sess_data_s {
     frame_t *last_frame;
     uint32_t last_ack_seq;
     uint32_t frames;
-    uint16_t orig_src_port;
+    unsigned int rtt_init:1;
+    unsigned int rtt_calculated:1;
     unsigned int end:1;
     unsigned int has_req:1;
-    unsigned int status:16;
+    unsigned int status:10;
+    unsigned int rtt:16;
 }sess_data_t, *p_sess_data_t;
 
 typedef struct sess_entry_s{
@@ -39,13 +41,17 @@ typedef struct sess_table_s{
 
 typedef struct tc_user_state_s{
     uint32_t status:16;
-    uint32_t closed_pattern:8;
+    uint32_t timer_type:2;
     uint32_t over:1;
     uint32_t over_recorded:1;
     uint32_t timestamped:1;
     uint32_t resp_syn_received:1;
     uint32_t resp_waiting:1;
+    uint32_t sess_continue:1;
     uint32_t last_ack_recorded:1;
+    uint32_t evt_added:1;
+    uint32_t set_rto:1;
+    uint32_t snd_after_set_rto:1;
 }tc_user_state_t;
 
 
@@ -69,6 +75,7 @@ typedef struct tc_user_s {
     uint32_t exp_ack_seq;
     
     uint32_t fast_retransmit_cnt:6;
+    uint32_t rtt:16;
 
     uint32_t ts_ec_r;
     uint32_t ts_value; 
@@ -80,6 +87,8 @@ typedef struct tc_user_s {
     unsigned char *src_mac;
     unsigned char *dst_mac;
 #endif
+
+    tc_event_timer_t ev;
 
     sess_data_t *orig_sess;
     frame_t     *orig_frame;
@@ -122,7 +131,7 @@ void tc_add_sess(p_sess_entry entry);
 p_sess_entry tc_retrieve_sess(uint64_t key);
 
 void process_outgress(unsigned char *packet);
-void process_ingress();
+bool process_ingress();
 void output_stat(); 
 void tc_interval_dispose(tc_event_timer_t *evt);
 void release_user_resources();
