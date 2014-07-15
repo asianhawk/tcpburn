@@ -567,21 +567,26 @@ set_topo_for_sess()
     sess_data_t *cur_sess, *prev_sess;
 
     prev = link_list_first(clt_settings.s_list);
+    prev_sess = (sess_data_t *) prev->data;
     cur  = prev->next;
+
     while (cur) {
         cur_sess = (sess_data_t *) cur->data;
-        prev_sess = (sess_data_t *) prev->data;
 
-        diff = cur_sess->first_pcap_time - prev_sess->last_pcap_time;
-        if (tc_abs(diff) < clt_settings.topo_time_diff) {
-            cur_sess->delayed = 1;
-            tc_log_debug2(LOG_NOTICE, 0, "sess %d and %d belong to the user", 
-                    i, i + 1);
+        if (cur_sess != NULL) {
+            diff = cur_sess->first_pcap_time - prev_sess->last_pcap_time;
+            if (tc_abs(diff) < clt_settings.topo_time_diff) {
+                cur_sess->delayed = 1;
+                tc_log_debug2(LOG_NOTICE, 0, "sess %d and %d are related",
+                        i, i + 1);
+            }
+            prev = cur;
+            cur = cur->next;
+            prev_sess = cur_sess;
+            i++;
+        } else {
+            break;
         }
-
-        prev = cur;
-        cur = cur->next;
-        i++;
     }
 }
 #endif
