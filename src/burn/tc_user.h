@@ -51,7 +51,7 @@ typedef struct tc_user_state_s{
 #if (TC_TOPO)
     uint32_t delayed:1;
 #endif
-    uint32_t rechecked:1;
+    uint32_t already_ignite:1;
     uint32_t over:1;
     uint32_t over_recorded:1;
     uint32_t timestamped:1;

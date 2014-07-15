@@ -271,7 +271,6 @@ tc_retrieve_active_user()
            init_phase = false;
            u = user_array + 0;
            base_user_seq = 1 % size_of_users;
-           u->state.rechecked =  1;
         } else {
             u = user_array + total;
             speed = clt_settings.conn_init_sp_fact;
@@ -293,7 +292,6 @@ tc_retrieve_active_user()
         }
     } else {
         u = user_array + base_user_seq;
-        u->state.rechecked =  1;
         base_user_seq = (base_user_seq + 1) % size_of_users;
     }
 
@@ -1348,37 +1346,45 @@ process_ingress()
     tc_user_t  *u = NULL;
 
     u = tc_retrieve_active_user();
+    
+    tc_log_debug1(LOG_INFO, 0, "ingress user:%llu", u->key);
 #if (TC_TOPO)
     if (u->state.delayed) {
+        tc_log_debug1(LOG_INFO, 0, "delay user:%llu", u->key);
         return false;
     }
 #endif
     if (u != NULL) {
 
         if (!u->state.over) {
-            if (!u->state.rechecked) {
+            if (!u->state.already_ignite) {
                 process_user_packet(u);
+                u->state.already_ignite = 1;
             }
-            if ((u->state.status & CLIENT_FIN) && (u->state.status & SERVER_FIN)) {
+
+            if ((u->state.status & CLIENT_FIN) && 
+                    (u->state.status & SERVER_FIN)) 
+            {
                 u->state.over = 1;
             }
         } else {
-           if (!u->state.over_recorded) {
+            if (!u->state.over_recorded) {
                 u->state.over_recorded = 1;
                 tc_stat.active_conn_cnt--;
                 if (tc_stat.active_conn_cnt == 0) {
                     tc_over = 1;
                 }
-            }
 #if (TC_TOPO)
-           if (!tc_over) {
-               u = u->topo_next;
-               if (u) {
-                   tc_log_debug0(LOG_INFO, 0, "activate topology next sess");
-                   u->state.delayed = 0;
-               }
-           }
+                if (!tc_over) {
+                    u = u->topo_next;
+                    if (u) {
+                        tc_log_debug1(LOG_INFO, 0, "activate topo next:%llu ", 
+                                u->key);
+                        u->state.delayed = 0;
+                    }
+                }
 #endif
+            }
         }
     } else {
         result = false;
