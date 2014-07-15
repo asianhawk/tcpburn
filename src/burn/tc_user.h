@@ -8,7 +8,6 @@ typedef struct frame_s {
     struct frame_s *next;
     struct frame_s *prev;
     unsigned char  *frame_data;
-    uint64_t        interval;
     uint32_t        seq;
     unsigned int    belong_to_the_same_req:1;
     unsigned int    frame_len:17;
@@ -18,12 +17,16 @@ typedef struct frame_s {
 typedef struct sess_data_s {
     frame_t *first_frame;
     frame_t *last_frame;
+    long     first_pcap_time;
     long     last_pcap_time;
     uint32_t last_ack_seq;
     uint32_t frames;
     unsigned int rtt_init:1;
     unsigned int rtt_calculated:1;
     unsigned int end:1;
+#if (TC_TOPO)
+    unsigned int delayed:1;
+#endif
     unsigned int has_req:1;
     unsigned int status:10;
     unsigned int rtt:16;
@@ -32,18 +35,23 @@ typedef struct sess_data_s {
 typedef struct sess_entry_s{
     uint64_t key;
     sess_data_t data;
-    struct sess_entry_s* next;
+    struct sess_entry_s *next;
 }sess_entry_t,*p_sess_entry;
 
 typedef struct sess_table_s{                                                                           
     int size;
     int num_of_sess;
-    p_sess_entry* entries;
+    p_sess_entry *entries;
 }sess_table_t;
+
 
 typedef struct tc_user_state_s{
     uint32_t status:16;
     uint32_t timer_type:2;
+#if (TC_TOPO)
+    uint32_t delayed:1;
+#endif
+    uint32_t rechecked:1;
     uint32_t over:1;
     uint32_t over_recorded:1;
     uint32_t timestamped:1;
@@ -95,6 +103,9 @@ typedef struct tc_user_s {
     sess_data_t *orig_sess;
     frame_t     *orig_frame;
     frame_t     *orig_unack_frame;
+#if (TC_TOPO)
+    struct tc_user_s *topo_next;
+#endif
 
     time_t   last_sent_time;
     long     last_recv_resp_cont_time;

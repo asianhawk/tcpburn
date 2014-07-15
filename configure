@@ -59,6 +59,10 @@ if [ $TC_SINGLE = YES ]; then
     have=TC_SINGLE . auto/have
 fi
 
+if [ $TC_TOPO = YES ]; then
+    have=TC_TOPO . auto/have
+fi
+
 if [ $TC_PCAP_SEND = YES ]; then
     have=TC_PCAP_SEND . auto/have
 fi

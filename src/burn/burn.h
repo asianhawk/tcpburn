@@ -91,14 +91,17 @@ typedef struct xcopy_clt_settings {
     unsigned int  mss:16;               /* MSS sent to backend */
     unsigned int  par_connections:8;    /* parallel connections */
     unsigned int  client_mode:3;     
+#if (TC_TOPO)
+    unsigned int  topo_time_diff:3;     
+#endif
+    unsigned int  target_localhost:1;
     unsigned int  do_daemonize:1;       /* daemon flag */
     unsigned int  percentage:7;         /* percentage of the full flow that 
                                            will be tranfered to the backend */
-    unsigned int  sess_timeout:16;   /* max value for sess timeout.
+    unsigned int  sess_timeout:16;      /* max value for sess timeout.
                                            If reaching this value, the sess
                                            will be removed */
     unsigned int  sess_keepalive_timeout:16;  
-    unsigned int  target_localhost:1;
 
     tc_pool_t    *pool;
     char         *raw_transfer;         /* online_ip online_port target_ip
@@ -106,7 +109,10 @@ typedef struct xcopy_clt_settings {
 
     char         *pid_file;             /* pid file */
     char         *log_path;             /* error log path */
-    char         *raw_clt_ips;              
+    char         *raw_clt_ips;     
+#if (TC_TOPO)
+    link_list    *s_list;
+#endif
     int           valid_ip_num;              
     uint32_t      valid_ips[M_CLIENT_IP_NUM];              
     int           users;
@@ -118,7 +124,7 @@ typedef struct xcopy_clt_settings {
     int           conn_init_sp_fact;
     long          pcap_time;
     pcap_t       *pcap;
-    uint64_t      interval;             /* accelerated times */
+    uint64_t      interval;            /* accelerated times */
 #if (TC_PCAP_SEND)
     char         *output_if_name;
 #endif

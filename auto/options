@@ -14,6 +14,7 @@ TC_OBJS=objs
 
 TC_PCAP_SEND=NO
 TC_ADVANCED=YES
+TC_TOPO=YES
 TC_COMBINED=YES
 TC_SINGLE=NO
 TC_COMET=NO
@@ -52,8 +53,9 @@ do
         --with-cc-opt=*)                 TC_CC_OPT="$value"        ;;
         --with-ld-opt=*)                 TC_LD_OPT="$value"        ;;
 
-        --comet)                         TC_COMET=YES             ;;
+        --comet)                         TC_COMET=YES              ;;
         --single)                        TC_SINGLE=YES             ;;
+        --topology)                      TC_TOPO=YES               ;;
         --pcap-send)                     TC_PCAP_SEND=YES          ;;
         --traditional)                   TC_ADVANCED=NO            ;;
         --disable-combined)              TC_COMBINED=NO            ;;
@@ -91,8 +93,9 @@ cat << END
   --with-debug                       enable debug logging
 
   --comet                            run tcpburn at comet mode
-  --traditional                      run tcpburn at traditional mode
   --single                           run tcpburn at non-distributed mode
+  --topology                         run tcpburn at topology mode
+  --traditional                      run tcpburn at traditional mode
   --pcap-send                        send packets at the data link 
   --disable-combined                 disable combined response mode        
 

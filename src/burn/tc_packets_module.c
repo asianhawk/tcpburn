@@ -68,9 +68,12 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
         uint32_t ack_seq, uint16_t src_port, bool saved, 
         uint16_t cont_len, int status)
 {
-    frame_t        *fr = NULL;
-    sess_data_t *session = NULL;
-    p_sess_entry entry   = NULL;
+    frame_t      *fr      = NULL;
+    sess_data_t  *session = NULL;
+    p_sess_entry  entry   = NULL;
+#if (TC_TOPO)  
+    p_link_node   ln;
+#endif
 
     entry = tc_retrieve_sess(key);
 
@@ -107,6 +110,7 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
         
         session = &(entry->data);
 
+        session->first_pcap_time = clt_settings.pcap_time;
         session->last_pcap_time = clt_settings.pcap_time;
         session->rtt = clt_settings.pcap_time;
         session->rtt_init = 1;
@@ -116,6 +120,11 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
         session->last_ack_seq = ack_seq;
         session->status = SYN_SENT;
         tc_add_sess(entry);
+#if (TC_TOPO)
+        ln = link_node_malloc(clt_settings.pool, session);
+        ln->key = clt_settings.pcap_time;
+        link_list_append_by_order(clt_settings.s_list, ln);
+#endif
 
     } else {
 
@@ -380,7 +389,6 @@ read_packets_from_pcap(char *pcap_file, char *filter)
     struct bpf_program  fp;
     struct pcap_pkthdr  pkt_hdr;  
 
-
     if ((pcap = pcap_open_offline(pcap_file, ebuf)) == NULL) {
         tc_log_info(LOG_ERR, 0, "open %s" , ebuf);
         return;
@@ -456,6 +464,7 @@ read_packets_from_pcap(char *pcap_file, char *filter)
     
 }
 
+
 int
 calculate_mem_pool_size(char *pcap_file, char *filter)
 {
@@ -470,6 +479,14 @@ calculate_mem_pool_size(char *pcap_file, char *filter)
     struct bpf_program  fp;
     struct pcap_pkthdr  pkt_hdr;  
 
+#if (TC_TOPO)
+    if (clt_settings.s_list == NULL) {
+        clt_settings.s_list = link_list_create(clt_settings.pool); 
+        if (clt_settings.s_list == NULL) {
+            return TC_ERROR;
+        }
+    }
+#endif
     if ((pcap = pcap_open_offline(pcap_file, ebuf)) == NULL) {
         tc_log_info(LOG_ERR, 0, "open %s" , ebuf);
         return TC_ERROR;
@@ -541,3 +558,27 @@ calculate_mem_pool_size(char *pcap_file, char *filter)
 }
 
 
+#if (TC_TOPO)
+void 
+set_topo_for_sess()
+{
+    int          diff;
+    p_link_node  prev, cur;
+    sess_data_t *cur_sess, *prev_sess;
+
+    prev = link_list_first(clt_settings.s_list);
+    cur  = prev->next;
+    while (cur) {
+        cur_sess = (sess_data_t *) cur->data;
+        prev_sess = (sess_data_t *) prev->data;
+
+        diff = cur_sess->first_pcap_time - prev_sess->first_pcap_time;
+        if (diff < clt_settings.topo_time_diff) {
+            cur_sess->delayed = 1;
+        }
+
+        prev = cur;
+        cur = cur->next;
+    }
+}
+#endif

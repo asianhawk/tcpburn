@@ -66,6 +66,9 @@ usage(void)
     printf("-M <num>       MTU value sent to backend (default 1500)\n");
     printf("-u <num>       concurrent users\n");
     printf("-c <ip,>       client ips\n");
+#if (TC_TOPO)
+    printf("-T <num>       topology time diff(default 6)\n");
+#endif
     printf("-a <num>       throughput factor(default 1)\n");
     printf("-i <num>       connection init speed fact(default 1024 connectins per second)\n");
     printf("-S <num>       MSS value sent back(default 1460)\n");
@@ -114,6 +117,9 @@ read_args(int argc, char **argv)
          "C:" /* parallel connections between burn and intercept */
          "p:" /* target server port to listen on */
          "e:" /* port seed */
+#if (TC_TOPO)
+         "T:" 
+#endif
          "M:" /* MTU sent to backend */
          "S:" /* mss value sent to backend */
          "t:" /* set the session timeout limit */
@@ -144,6 +150,11 @@ read_args(int argc, char **argv)
             case 'I':
                 clt_settings.interval = atoi(optarg);
                 break;
+#if (TC_TOPO)
+            case 'T':
+                clt_settings.topo_time_diff = atoi(optarg);
+                break;
+#endif
             case 'i':
                 clt_settings.conn_init_sp_fact = atoi(optarg);
                 break;
@@ -219,6 +230,9 @@ read_args(int argc, char **argv)
                     case 'C':
                     case 'm':
                     case 'M':
+#if (TC_TOPO)
+                    case 'T':
+#endif
                     case 'S':
                     case 't':
                     case 'e':
@@ -723,6 +737,9 @@ settings_init()
     clt_settings.srv_port = SERVER_PORT;
     clt_settings.port_seed = 0;
     clt_settings.par_connections = 2;
+#if (TC_TOPO)
+    clt_settings.topo_time_diff = 6;
+#endif
     clt_settings.client_mode = 0;
     clt_settings.sess_timeout = DEFAULT_SESSION_TIMEOUT;
     

@@ -106,6 +106,52 @@ tc_add_sess(p_sess_entry entry)
 }
 
 
+#if (TC_TOPO) 
+static void
+tc_init_sess_for_users()
+{
+    bool            is_find = false;
+    int             i, index = 0;
+    tc_user_t      *u, *prev;
+    sess_data_t    *sess;
+    p_link_node     ln;
+    p_sess_entry    e = NULL;
+
+    if (s_table->num_of_sess == 0) {
+        tc_log_info(LOG_ERR, 0, "no sess for replay");
+        tc_over = 1;
+        return;
+    }
+
+    index = 0;
+    ln = NULL;
+    prev = NULL;
+    for (i = 0; i < size_of_users; i++) {
+        if (ln != NULL) {
+            ln = ln->next;
+        } else {
+            ln =  link_list_first(clt_settings.s_list);
+        }
+        u = user_array + i;
+        u->orig_sess = (sess_data_t *) ln->data;
+        u->orig_frame = u->orig_sess->first_frame;
+        u->rtt = u->orig_sess->rtt;
+        u->orig_unack_frame = u->orig_sess->first_frame;
+        if (prev != NULL && u->orig_sess->delayed) {
+            u->state.delayed = 1;
+            prev->topo_next = u;
+        }
+        tc_stat.orig_clt_packs_cnt += u->orig_sess->frames;
+        prev = u;
+    }
+
+    tc_log_info(LOG_NOTICE, 0, 
+            "users:%d, sess:%d, total packets needed sent:%llu",
+            size_of_users, s_table->num_of_sess, tc_stat.orig_clt_packs_cnt);
+}
+
+#else
+
 static void
 tc_init_sess_for_users()
 {
@@ -177,8 +223,8 @@ tc_init_sess_for_users()
         u->orig_frame = u->orig_sess->first_frame;
         u->rtt = u->orig_sess->rtt;
         u->orig_unack_frame = u->orig_sess->first_frame;
-        tc_stat.orig_clt_packs_cnt += u->orig_sess->frames;
         index = (index + 1) % s_table->num_of_sess;
+        tc_stat.orig_clt_packs_cnt += u->orig_sess->frames;
     }
 
     tc_log_info(LOG_NOTICE, 0, 
@@ -187,7 +233,7 @@ tc_init_sess_for_users()
 
     tc_destroy_pool(pool);
 }
-
+#endif
 
 p_sess_entry 
 tc_retrieve_sess(uint64_t key)
@@ -204,7 +250,6 @@ tc_retrieve_sess(uint64_t key)
 
     return last;
 }
-
 
 static tc_user_t *
 tc_retrieve_active_user()
@@ -224,7 +269,9 @@ tc_retrieve_active_user()
         if (total >= size_of_users) {
            tc_log_info(LOG_NOTICE, 0, "total is larger than size of users");
            init_phase = false;
-           return NULL;
+           u = user_array + 0;
+           base_user_seq = 1 % size_of_users;
+           u->state.rechecked =  1;
         } else {
             u = user_array + total;
             speed = clt_settings.conn_init_sp_fact;
@@ -243,11 +290,14 @@ tc_retrieve_active_user()
                 }
             }
 
-            return u;
         }
     } else {
-        return NULL;
+        u = user_array + base_user_seq;
+        u->state.rechecked =  1;
+        base_user_seq = (base_user_seq + 1) % size_of_users;
     }
+
+    return u;
 }
 
 
@@ -1298,27 +1348,40 @@ process_ingress()
     tc_user_t  *u = NULL;
 
     u = tc_retrieve_active_user();
-
+#if (TC_TOPO)
+    if (u->state.delayed) {
+        return false;
+    }
+#endif
     if (u != NULL) {
 
         if (!u->state.over) {
-            process_user_packet(u);
+            if (!u->state.rechecked) {
+                process_user_packet(u);
+            }
             if ((u->state.status & CLIENT_FIN) && (u->state.status & SERVER_FIN)) {
                 u->state.over = 1;
             }
         } else {
-            if (!u->state.over_recorded) {
+           if (!u->state.over_recorded) {
                 u->state.over_recorded = 1;
                 tc_stat.active_conn_cnt--;
                 if (tc_stat.active_conn_cnt == 0) {
                     tc_over = 1;
                 }
             }
+#if (TC_TOPO)
+           if (!tc_over) {
+               u = u->topo_next;
+               if (u) {
+                   u->state.delayed = 0;
+               }
+           }
+#endif
         }
     } else {
         result = false;
     }
-    
     check_replay_complete();
 
     return result;

@@ -225,6 +225,7 @@ int before(uint32_t seq1, uint32_t seq2);
 #include <tc_log.h>
 #include <tc_rbtree.h>
 #include <tc_alloc.h>
+#include <tc_link_list.h>
 #include <tc_palloc.h>
 #include <tc_time.h>
 #include <tc_signal.h>
