@@ -572,8 +572,8 @@ set_topo_for_sess()
         cur_sess = (sess_data_t *) cur->data;
         prev_sess = (sess_data_t *) prev->data;
 
-        diff = cur_sess->first_pcap_time - prev_sess->first_pcap_time;
-        if (diff < clt_settings.topo_time_diff) {
+        diff = cur_sess->first_pcap_time - prev_sess->last_pcap_time;
+        if (tc_abs(diff) < clt_settings.topo_time_diff) {
             cur_sess->delayed = 1;
         }
 

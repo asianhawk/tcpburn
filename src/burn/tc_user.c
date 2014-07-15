@@ -1374,6 +1374,7 @@ process_ingress()
            if (!tc_over) {
                u = u->topo_next;
                if (u) {
+                   tc_log_debug0(LOG_INFO, 0, "activate topology next sess");
                    u->state.delayed = 0;
                }
            }

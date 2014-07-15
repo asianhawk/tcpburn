@@ -197,6 +197,8 @@ burn_init(tc_event_loop_t *event_loop)
                 clt_settings.filter);
     }
 
+    set_topo_for_sess();
+
     tc_log_info(LOG_NOTICE, 0, "pool used:%llu", clt_settings.mem_pool_index);
 
     tc_event_add_timer(event_loop->pool, NULL, 5000, NULL, tc_interval_dispose);

@@ -280,6 +280,9 @@ output_for_debug(int argc, char **argv)
 #if (TC_PCAP_SEND)
     tc_log_info(LOG_NOTICE, 0, "TC_PCAP_SEND mode");
 #endif
+#if (TC_TOPO)
+    tc_log_info(LOG_NOTICE, 0, "TC_TOPO mode");
+#endif
 
 }
 
