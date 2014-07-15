@@ -562,7 +562,7 @@ calculate_mem_pool_size(char *pcap_file, char *filter)
 void 
 set_topo_for_sess()
 {
-    int          diff;
+    int          i = 0, diff;
     p_link_node  prev, cur;
     sess_data_t *cur_sess, *prev_sess;
 
@@ -575,10 +575,13 @@ set_topo_for_sess()
         diff = cur_sess->first_pcap_time - prev_sess->last_pcap_time;
         if (tc_abs(diff) < clt_settings.topo_time_diff) {
             cur_sess->delayed = 1;
+            tc_log_debug2(LOG_NOTICE, 0, "sess %d and %d belong to the user", 
+                    i, i + 1);
         }
 
         prev = cur;
         cur = cur->next;
+        i++;
     }
 }
 #endif
