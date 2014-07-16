@@ -933,14 +933,16 @@ process_packet(tc_user_t *u, unsigned char *frame)
 }
 
 
-static
-bool process_user_packet(tc_user_t *u)
+static bool 
+process_user_packet(tc_user_t *u)
 {
-    unsigned char   frame[MAX_FRAME_LENGTH];
+    unsigned char  *frame;
 
     if (send_stop(u)) {
         return false;
     }
+
+    frame = clt_settings.frame;
 
     while (true) {
         if (u->orig_frame->frame_len > MAX_FRAME_LENGTH) {

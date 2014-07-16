@@ -143,7 +143,7 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
                 session->rtt = 1;
             }
             session->rtt_calculated = 1;
-            tc_log_info(LOG_INFO, 0, "rtt:%ld", session->rtt);
+            tc_log_debug1(LOG_INFO, 0, "rtt:%ld", session->rtt);
         }
 
         if (cont_len > 0) {
