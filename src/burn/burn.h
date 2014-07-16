@@ -91,9 +91,7 @@ typedef struct xcopy_clt_settings {
     unsigned int  mss:16;               /* MSS sent to backend */
     unsigned int  par_connections:8;    /* parallel connections */
     unsigned int  client_mode:3;     
-#if (TC_TOPO)
-    unsigned int  topo_time_diff:3;     
-#endif
+
     unsigned int  target_localhost:1;
     unsigned int  do_daemonize:1;       /* daemon flag */
     unsigned int  percentage:7;         /* percentage of the full flow that 
@@ -112,6 +110,7 @@ typedef struct xcopy_clt_settings {
     char         *raw_clt_ips;     
 #if (TC_TOPO)
     link_list    *s_list;
+    int           topo_time_diff;     
 #endif
     int           valid_ip_num;              
     uint32_t      valid_ips[M_CLIENT_IP_NUM];              

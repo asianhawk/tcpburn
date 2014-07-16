@@ -152,7 +152,7 @@ read_args(int argc, char **argv)
                 break;
 #if (TC_TOPO)
             case 'T':
-                clt_settings.topo_time_diff = atoi(optarg);
+                clt_settings.topo_time_diff = 1000 * atoi(optarg);
                 break;
 #endif
             case 'i':
@@ -644,6 +644,13 @@ set_details()
         return -1;
     }
 
+#if (TC_TOPO)
+    if (clt_settings.topo_time_diff <= 0) {
+        clt_settings.topo_time_diff = 6000;
+    }
+    tc_log_info(LOG_NOTICE, 0, "topology time diff:%d", 
+            clt_settings.topo_time_diff);
+#endif
     /* set the ip port pair mapping according to settings */
     if (retrieve_target_addresses(clt_settings.raw_transfer,
                               &clt_settings.transfer) == -1)
@@ -741,7 +748,7 @@ settings_init()
     clt_settings.port_seed = 0;
     clt_settings.par_connections = 2;
 #if (TC_TOPO)
-    clt_settings.topo_time_diff = 6;
+    clt_settings.topo_time_diff = 6000;
 #endif
     clt_settings.client_mode = 0;
     clt_settings.sess_timeout = DEFAULT_SESSION_TIMEOUT;

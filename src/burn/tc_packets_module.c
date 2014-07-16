@@ -143,7 +143,7 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
                 session->rtt = 1;
             }
             session->rtt_calculated = 1;
-            tc_log_info(LOG_INFO, 0, "rtt:%u", session->rtt);
+            tc_log_info(LOG_INFO, 0, "rtt:%ld", session->rtt);
         }
 
         if (cont_len > 0) {
@@ -359,9 +359,7 @@ tc_process_packets(tc_event_timer_t *evt)
     int i = 0;
 
     for (; i < clt_settings.throughput_factor; i++) {
-        if (!process_ingress()) {
-            break;
-        }
+        process_ingress();
     }
 
     tc_event_update_timer(evt, 1);
@@ -566,6 +564,24 @@ set_topo_for_sess()
     p_link_node  prev, cur;
     sess_data_t *cur_sess, *prev_sess;
 
+    cur  = link_list_first(clt_settings.s_list);
+    prev = NULL;
+
+    while(cur) {
+        cur_sess = (sess_data_t *) cur->data;
+        if (!cur_sess->has_req) {
+           link_list_remove(clt_settings.s_list, cur); 
+           if (prev) {
+               cur = link_list_get_next(clt_settings.s_list, prev);
+           } else {
+               cur = link_list_first(clt_settings.s_list);
+           }
+        } else {
+            prev = cur;
+            cur = link_list_get_next(clt_settings.s_list, cur);
+        }
+    }
+
     prev = link_list_first(clt_settings.s_list);
     prev_sess = (sess_data_t *) prev->data;
     cur  = prev->next;
@@ -573,8 +589,8 @@ set_topo_for_sess()
     while (cur) {
         cur_sess = (sess_data_t *) cur->data;
 
-        if (cur_sess != NULL) {
-            diff = cur_sess->first_pcap_time - prev_sess->last_pcap_time;
+        if (cur_sess != NULL && cur_sess->has_req) {
+            diff = cur_sess->first_pcap_time - prev_sess->first_pcap_time;
             if (tc_abs(diff) < clt_settings.topo_time_diff) {
                 cur_sess->delayed = 1;
                 tc_log_debug2(LOG_NOTICE, 0, "sess %d and %d are related",

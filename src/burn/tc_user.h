@@ -19,6 +19,7 @@ typedef struct sess_data_s {
     frame_t *last_frame;
     long     first_pcap_time;
     long     last_pcap_time;
+    long     rtt;
     uint32_t last_ack_seq;
     uint32_t frames;
     unsigned int rtt_init:1;
@@ -29,7 +30,6 @@ typedef struct sess_data_s {
 #endif
     unsigned int has_req:1;
     unsigned int status:10;
-    unsigned int rtt:16;
 }sess_data_t, *p_sess_data_t;
 
 typedef struct sess_entry_s{
@@ -85,7 +85,6 @@ typedef struct tc_user_s {
     uint32_t exp_ack_seq;
     
     uint32_t fast_retransmit_cnt:6;
-    uint32_t rtt:16;
 
     uint32_t ts_ec_r;
     uint32_t ts_value; 
@@ -103,12 +102,13 @@ typedef struct tc_user_s {
     sess_data_t *orig_sess;
     frame_t     *orig_frame;
     frame_t     *orig_unack_frame;
+    long         last_recv_resp_cont_time;
+    long         rtt;
 #if (TC_TOPO)
-    struct tc_user_s *topo_next;
+    struct tc_user_s *topo_prev;
+    time_t       start_time;
 #endif
-
-    time_t   last_sent_time;
-    long     last_recv_resp_cont_time;
+    time_t       last_sent_time;
 
 }tc_user_t;
 
@@ -144,7 +144,7 @@ void tc_add_sess(p_sess_entry entry);
 p_sess_entry tc_retrieve_sess(uint64_t key);
 
 void process_outgress(unsigned char *packet);
-bool process_ingress();
+void process_ingress();
 void output_stat(); 
 void tc_interval_dispose(tc_event_timer_t *evt);
 void release_user_resources();

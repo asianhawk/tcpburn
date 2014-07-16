@@ -113,7 +113,6 @@ tc_init_sess_for_users()
     bool            is_find = false;
     int             i, index = 0;
     tc_user_t      *u, *prev;
-    sess_data_t    *sess;
     p_link_node     ln;
     p_sess_entry    e = NULL;
 
@@ -123,26 +122,30 @@ tc_init_sess_for_users()
         return;
     }
 
+    ln    = NULL;
     index = 0;
-    ln = NULL;
-    prev = NULL;
+
     for (i = 0; i < size_of_users; i++) {
-        if (ln != NULL) {
-            ln = ln->next;
-        } else {
-            ln =  link_list_first(clt_settings.s_list);
+        if (ln == NULL) {
+            ln = link_list_first(clt_settings.s_list);
+            prev = NULL;
         }
+
         u = user_array + i;
         u->orig_sess = (sess_data_t *) ln->data;
         u->orig_frame = u->orig_sess->first_frame;
         u->rtt = u->orig_sess->rtt;
         u->orig_unack_frame = u->orig_sess->first_frame;
+
         if (prev != NULL && u->orig_sess->delayed) {
             u->state.delayed = 1;
-            prev->topo_next = u;
+            u->topo_prev = prev;
         }
+
         tc_stat.orig_clt_packs_cnt += u->orig_sess->frames;
+
         prev = u;
+        ln = link_list_get_next(clt_settings.s_list, ln);
     }
 
     tc_log_info(LOG_NOTICE, 0, 
@@ -527,6 +530,12 @@ send_stop(tc_user_t *u)
     long      app_resp_diff;
     uint32_t  srv_sk_buf_s;
 
+    if (u->state.over) {
+        tc_log_debug1(LOG_DEBUG, 0, "sess is over:%d", 
+                ntohs(u->src_port));
+        return true;
+    }
+
     if (u->orig_frame == NULL) {
         tc_log_debug1(LOG_DEBUG, 0, "orig frame is null :%d", 
                 ntohs(u->src_port));
@@ -735,6 +744,7 @@ tc_delay_ack(tc_user_t *u, tc_event_timer_t *ev)
 static void 
 tc_lantency_ctl(tc_event_timer_t *ev) 
 {
+    int        lantency;
     bool       timer_set = false;
     tc_user_t *u = ev->data;
 
@@ -763,10 +773,13 @@ tc_lantency_ctl(tc_event_timer_t *ev)
             }
         }    
 
-        if (!timer_set && u->orig_frame != NULL) {
-            utimer_disp(u, u->orig_frame->time_diff, TYPE_ACT);
+        if (!timer_set && !u->state.over && u->orig_frame != NULL) {
+            lantency = u->orig_frame->time_diff;
+            if (lantency < u->rtt) {
+                lantency = u->rtt;
+            }
+            utimer_disp(u, lantency, TYPE_ACT);
         }
-
     } else {
         tc_log_info(LOG_ERR, 0, "sesson already deleted:%llu", ev); 
     }    
@@ -852,12 +865,14 @@ process_packet(tc_user_t *u, unsigned char *frame)
 
     tc_stat.packs_sent_cnt++;
     if (tcp_header->syn) {
+        tc_log_debug2(LOG_INFO, 0, "rtt:%ld, p:%u", u->rtt, ntohs(u->src_port));
         tc_stat.syn_sent_cnt++;
 #if (!TC_SINGLE)
         if (!send_router_info(u, CLIENT_ADD)) {
             return false;
         }
 #endif
+        u->start_time = tc_time();
         u->state.last_ack_recorded = 0;
         u->state.status  |= SYN_SENT;
     } else if (tcp_header->fin) {
@@ -1323,7 +1338,7 @@ process_outgress(unsigned char *packet)
 }
 
 
-static void 
+static inline void 
 check_replay_complete()
 {
 #if (!TC_COMET)
@@ -1339,10 +1354,37 @@ check_replay_complete()
 }
 
 
-bool
+#if (TC_TOPO)
+static bool 
+could_start_sess(tc_user_t *u) 
+{
+    int diff1, diff2;
+
+    if (u->topo_prev != NULL) {
+        if (u->topo_prev->state.delayed) {
+            return false;
+        }
+
+        diff1 = tc_time() - u->topo_prev->start_time;
+        diff2 = u->topo_prev->orig_sess->first_pcap_time;
+        diff2 = u->orig_sess->first_pcap_time - diff2;
+
+        if (diff1  >= diff2) {
+            return true;
+        }
+
+    } else {
+        tc_log_info(LOG_ERR, 0, "topo previous sess is null");
+        return false;
+    }
+
+}
+#endif
+
+
+void
 process_ingress()
 {
-    bool        result = true;
     tc_user_t  *u = NULL;
 
     u = tc_retrieve_active_user();
@@ -1350,48 +1392,38 @@ process_ingress()
     tc_log_debug1(LOG_INFO, 0, "ingress user:%llu", u->key);
 #if (TC_TOPO)
     if (u->state.delayed) {
-        tc_log_debug1(LOG_INFO, 0, "delay user:%llu", u->key);
-        return false;
+        if (could_start_sess(u)) {
+            u->state.delayed = 0;
+            tc_log_debug1(LOG_INFO, 0, "activate topo next:%llu ", u->key);
+        } else {
+            tc_log_debug1(LOG_INFO, 0, "delay user:%llu", u->key);
+            return;
+        }
     }
 #endif
-    if (u != NULL) {
 
-        if (!u->state.over) {
-            if (!u->state.already_ignite) {
-                process_user_packet(u);
-                u->state.already_ignite = 1;
-            }
+    if (!u->state.over) {
+        if (!u->state.already_ignite) {
+            process_user_packet(u);
+            u->state.already_ignite = 1;
+        }
 
-            if ((u->state.status & CLIENT_FIN) && 
-                    (u->state.status & SERVER_FIN)) 
-            {
-                u->state.over = 1;
-            }
-        } else {
-            if (!u->state.over_recorded) {
-                u->state.over_recorded = 1;
-                tc_stat.active_conn_cnt--;
-                if (tc_stat.active_conn_cnt == 0) {
-                    tc_over = 1;
-                }
-#if (TC_TOPO)
-                if (!tc_over) {
-                    u = u->topo_next;
-                    if (u) {
-                        tc_log_debug1(LOG_INFO, 0, "activate topo next:%llu ", 
-                                u->key);
-                        u->state.delayed = 0;
-                    }
-                }
-#endif
-            }
+        if ((u->state.status & CLIENT_FIN) && 
+                (u->state.status & SERVER_FIN)) 
+        {
+            u->state.over = 1;
         }
     } else {
-        result = false;
+        if (!u->state.over_recorded) {
+            u->state.over_recorded = 1;
+            tc_stat.active_conn_cnt--;
+            if (tc_stat.active_conn_cnt == 0) {
+                tc_over = 1;
+            }
+        }
     }
-    check_replay_complete();
 
-    return result;
+    check_replay_complete();
 }
 
 
