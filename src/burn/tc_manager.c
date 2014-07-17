@@ -200,7 +200,9 @@ burn_init(tc_event_loop_t *event_loop)
                 clt_settings.filter);
     }
 
+#if (TC_TOPO)
     set_topo_for_sess();
+#endif
 
     pool_used = clt_settings.mem_pool_cur_p - clt_settings.mem_pool;
     tc_log_info(LOG_NOTICE, 0, "pool used:%d", pool_used);

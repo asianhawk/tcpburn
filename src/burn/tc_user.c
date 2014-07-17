@@ -22,7 +22,7 @@ static void send_faked_ack(tc_user_t *u);
 static void send_faked_rst(tc_user_t *u);
 static void retransmit(tc_user_t *u, uint32_t cur_ack_seq);
 
-static uint32_t 
+static inline uint32_t 
 supplemental_hash(uint32_t value)                                                                 
 {
     uint32_t h = 0;
@@ -40,10 +40,12 @@ supplemental_hash(uint32_t value)
 }
 
 
-static uint32_t table_index(uint32_t h, uint32_t len)
+static inline uint32_t 
+table_index(uint32_t h, uint32_t len)
 {
     return h & (len - 1);
 }
+
 
 int 
 tc_build_sess_table(int size)
@@ -73,7 +75,7 @@ tc_build_sess_table(int size)
 }
 
 
-uint64_t 
+inline uint64_t 
 tc_get_key(uint32_t ip, uint16_t port)
 {
     uint64_t ip_l   = (uint64_t) ip;
@@ -345,6 +347,7 @@ get_port(int default_port)
     return htons((uint16_t) value);
 }
 
+
 bool 
 tc_build_users(int port_prioritized, int num_users, uint32_t *ips, int num_ip)
 {
@@ -389,8 +392,8 @@ tc_build_users(int port_prioritized, int num_users, uint32_t *ips, int num_ip)
         return false;
     }
 
-    count     = 0;
-    keys      = (uint64_t *) tc_palloc (pool, sizeof(uint64_t) * size_of_users);
+    count = 0;
+    keys  = (uint64_t *) tc_palloc (pool, sizeof(uint64_t) * size_of_users);
     if (keys == NULL) {
         tc_destroy_pool(pool);
         return false;
@@ -734,7 +737,7 @@ fill_frame(struct ethernet_hdr *hdr, unsigned char *smac, unsigned char *dmac)
 #endif
 
 
-static void
+static inline void
 tc_delay_ack(tc_user_t *u, tc_event_timer_t *ev)
 {
     send_faked_ack(u); 
@@ -872,7 +875,9 @@ process_packet(tc_user_t *u, unsigned char *frame)
             return false;
         }
 #endif
+#if (TC_TOPO)
         u->start_time = tc_time();
+#endif
         u->state.last_ack_recorded = 0;
         u->state.status  |= SYN_SENT;
     } else if (tcp_header->fin) {
