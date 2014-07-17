@@ -159,7 +159,7 @@ connect_to_server(tc_event_loop_t *event_loop)
 int
 burn_init(tc_event_loop_t *event_loop)
 {
-    int      i, result;
+    int      i, result, pool_used;
     uint64_t pool_size;
 
     /* register some timer */
@@ -184,12 +184,15 @@ burn_init(tc_event_loop_t *event_loop)
     tc_log_info(LOG_NOTICE, 0, "pool size:%llu", clt_settings.mem_pool_size);
 
     pool_size = clt_settings.mem_pool_size;
-    if (clt_settings.mem_pool_size > 0) {
-        clt_settings.mem_pool = (unsigned char *) calloc(pool_size, 
-                sizeof(unsigned char));
+    if (pool_size > 0) {
+        clt_settings.mem_pool = (unsigned char *) tc_pcalloc(clt_settings.pool,
+                pool_size);
         if (clt_settings.mem_pool == NULL) {
             return TC_ERROR;
         }
+        clt_settings.mem_pool_cur_p = tc_align_ptr(clt_settings.mem_pool, 
+                TC_ALIGNMENT);
+        clt_settings.mem_pool_end_p = clt_settings.mem_pool + pool_size;
     }
 
     for (i = 0; i < clt_settings.num_pcap_files; i++) {
@@ -199,7 +202,8 @@ burn_init(tc_event_loop_t *event_loop)
 
     set_topo_for_sess();
 
-    tc_log_info(LOG_NOTICE, 0, "pool used:%llu", clt_settings.mem_pool_index);
+    pool_used = clt_settings.mem_pool_cur_p - clt_settings.mem_pool;
+    tc_log_info(LOG_NOTICE, 0, "pool used:%d", pool_used);
 
     tc_event_add_timer(event_loop->pool, NULL, 5000, NULL, tc_interval_dispose);
 

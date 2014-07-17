@@ -16,17 +16,22 @@ static void tc_process_packets(tc_event_timer_t *evt);
 static uint64_t timeval_diff(struct timeval *start, struct timeval *cur);
 
 
-static unsigned char *alloc_pool_mem(int length)
+static unsigned char *
+alloc_pool_mem(int length)
 {
-    unsigned char *p;
+    unsigned char *p, *q;
 
-    p = clt_settings.mem_pool + clt_settings.mem_pool_index;
-    clt_settings.mem_pool_index += length;
+    p = clt_settings.mem_pool_cur_p;
+    q = p;
+    q += length;
+    q = tc_align_ptr(q, TC_ALIGNMENT);
 
-    if (clt_settings.mem_pool_index > clt_settings.mem_pool_size) {
-        tc_log_info(LOG_ERR, 0, "pool full, calloc error for frame data");
+    if (q > clt_settings.mem_pool_end_p) {
+        tc_log_info(LOG_ERR, 0, "pool full, alloc error for frame data");
         return NULL;
     }
+
+    clt_settings.mem_pool_cur_p = q;
 
     return p;
 }
@@ -466,7 +471,7 @@ read_packets_from_pcap(char *pcap_file, char *filter)
 int
 calculate_mem_pool_size(char *pcap_file, char *filter)
 {
-    int                 l2_len;
+    int                 l2_len, aligned_len;
     char                ebuf[PCAP_ERRBUF_SIZE];
     bool                stop = false;
     pcap_t             *pcap;
@@ -537,9 +542,13 @@ calculate_mem_pool_size(char *pcap_file, char *filter)
                     }
 
                     if (tcp_header->syn) {
-                        clt_settings.mem_pool_size += sizeof(sess_entry_t);
+                        aligned_len = sizeof(sess_entry_t);
+                        aligned_len = tc_align(aligned_len, TC_ALIGNMENT);
+                        clt_settings.mem_pool_size += aligned_len;
                     } 
-                    clt_settings.mem_pool_size += pkt_hdr.len + sizeof(frame_t);
+                    aligned_len = pkt_hdr.len + sizeof(frame_t);
+                    aligned_len = tc_align(aligned_len, TC_ALIGNMENT);
+                    clt_settings.mem_pool_size += aligned_len;
                 }
             }
         } else {

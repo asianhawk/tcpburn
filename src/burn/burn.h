@@ -141,7 +141,8 @@ typedef struct xcopy_clt_settings {
     tc_event_t    *ev[MAX_FD_NUM];
 
     uint64_t       mem_pool_size;  
-    uint64_t       mem_pool_index;  
+    unsigned char *mem_pool_cur_p;  
+    unsigned char *mem_pool_end_p;  
     unsigned char *mem_pool;  
     unsigned char  frame[MAX_FRAME_LENGTH];
 } xcopy_clt_settings;
