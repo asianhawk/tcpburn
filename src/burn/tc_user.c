@@ -526,6 +526,19 @@ tc_build_users(int port_prioritized, int num_users, uint32_t *ips, int num_ip)
 }
 
 
+static inline void
+record_session_over(tc_user_t *u) 
+{
+    if (!u->state.over_recorded) {
+        u->state.over_recorded = 1;
+        tc_stat.active_conn_cnt--;
+        if (tc_stat.active_conn_cnt == 0) {
+            tc_over = 1;
+        }
+    }
+}
+
+
 static bool
 send_stop(tc_user_t *u) 
 {
@@ -536,6 +549,7 @@ send_stop(tc_user_t *u)
     if (u->state.over) {
         tc_log_debug1(LOG_DEBUG, 0, "sess is over:%d", 
                 ntohs(u->src_port));
+        record_session_over(u);
         return true;
     }
 
@@ -886,6 +900,7 @@ process_packet(tc_user_t *u, unsigned char *frame)
     } else if (tcp_header->rst) {
         tc_stat.rst_sent_cnt++;
         u->state.status  |= CLIENT_FIN;
+        u->state.over = 1;
         tc_log_debug1(LOG_DEBUG, 0, "a reset packet to back:%u",
                 ntohs(u->src_port));
     }
@@ -1421,13 +1436,7 @@ process_ingress()
             u->state.over = 1;
         }
     } else {
-        if (!u->state.over_recorded) {
-            u->state.over_recorded = 1;
-            tc_stat.active_conn_cnt--;
-            if (tc_stat.active_conn_cnt == 0) {
-                tc_over = 1;
-            }
-        }
+        record_session_over(u);
     }
 
     check_replay_complete();
