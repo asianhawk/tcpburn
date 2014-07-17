@@ -77,7 +77,7 @@ tc_log_init(const char *file)
 
     if (log_fd == -1) {
         fprintf(stderr, "Open log file error: %s\n", strerror(errno));
-    }   
+    }
 
     return log_fd;
 }

@@ -21,7 +21,6 @@ int tc_socket_init();
 int tc_socket_set_nonblocking(int fd);
 int tc_socket_set_nodelay(int fd);
 int tc_socket_connect(int fd, uint32_t ip, uint16_t port);
-int tc_socket_listen(int fd, const char *bind_ip, uint16_t port);
 int tc_socket_cmb_recv(int fd, int *num, char *buffer);
 int tc_socket_send(int fd, char *buffer, int len);
 

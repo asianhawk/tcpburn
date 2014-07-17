@@ -11,7 +11,6 @@ static struct timeval first_pack_time, last_v_pack_time,
                       last_pack_time;
 
 static int dispose_packet(unsigned char *frame, int frame_len, int ip_recv_len);
-
 static void tc_process_packets(tc_event_timer_t *evt);
 static uint64_t timeval_diff(struct timeval *start, struct timeval *cur);
 
@@ -36,7 +35,9 @@ alloc_pool_mem(int length)
     return p;
 }
 
-static void append_by_order(sess_data_t *s, frame_t *added_frame)
+
+static void 
+append_by_order(sess_data_t *s, frame_t *added_frame)
 {
     bool     last_changed = true;
     frame_t *next, *node;
@@ -219,7 +220,6 @@ dispose_packet(unsigned char *frame, int frame_len, int ip_recv_len)
 
     packet = frame + ETHERNET_HDR_LEN;
 
-
     ip_header   = (tc_ip_header_t *) packet;
 
     packets_cnt++;
@@ -227,7 +227,7 @@ dispose_packet(unsigned char *frame, int frame_len, int ip_recv_len)
         return TC_ERROR;
     }    
 
-    size_ip     = ip_header->ihl << 2;
+    size_ip = ip_header->ihl << 2;
     if (size_ip < 20) {
         tc_log_info(LOG_WARN, 0, "Invalid IP header length: %d", size_ip);
         return TC_ERROR;
@@ -248,7 +248,7 @@ dispose_packet(unsigned char *frame, int frame_len, int ip_recv_len)
                 return TC_ERROR;
             }
         }
-        tot_len     = ntohs(ip_header -> tot_len);
+        tot_len  = ntohs(ip_header -> tot_len);
         head_len = size_tcp + size_ip;
         if (tot_len < head_len) {
             tc_log_info(LOG_WARN, 0, "bad tot_len:%d bytes, header len:%d",

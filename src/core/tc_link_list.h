@@ -36,20 +36,6 @@ link_list_append(link_list *l, p_link_node p)
 }
 
 
-static inline void 
-link_list_push(link_list *l, p_link_node p)
-{
-    p_link_node node;
-
-    node         = l->head.next;
-    node->prev   = p;
-    p->next      = node;
-    l->head.next = p;
-    p->prev      = &(l->head);
-    l->size++;
-}
-
-
 static inline p_link_node 
 link_list_remove(link_list *l, p_link_node node)
 {
@@ -72,17 +58,6 @@ link_list_first(link_list *l)
     }
 
     return l->head.next;
-}
-
-
-static inline p_link_node 
-link_list_tail(link_list *l)
-{
-    if (l == NULL || l->head.next == &(l->head)) {
-        return NULL;
-    }
-
-    return l->head.prev;
 }
 
 

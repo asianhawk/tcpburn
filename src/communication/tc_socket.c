@@ -213,45 +213,6 @@ tc_socket_connect(int fd, uint32_t ip, uint16_t port)
 
 }
 
-int
-tc_socket_listen(int fd, const char *bind_ip, uint16_t port)
-{
-    int                opt, ret;
-    socklen_t          len; 
-    struct sockaddr_in local_addr;
-
-    tc_memzero(&local_addr, sizeof(local_addr));
-
-    local_addr.sin_port   = ntohs(port);
-    local_addr.sin_family = AF_INET;
-
-    if (bind_ip) {
-        /* set bind ip for security reasons */
-        inet_aton(bind_ip, &local_addr.sin_addr);
-    }
-
-    opt = 1;
-    ret = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-    if (ret == -1) {
-        tc_log_info(LOG_ERR, errno, "setsockopt error");
-        return TC_INVALID_SOCKET;
-    }
-
-    len = (socklen_t) sizeof(local_addr);
-
-    if (bind(fd, (struct sockaddr *) &local_addr, len) == -1) {
-        tc_log_info(LOG_ERR, errno, "Bind socket(%d) to port:%d failed",
-                    fd, port);
-        return TC_ERROR;
-    }
-
-    if (listen(fd, 5) == -1) {
-        tc_log_info(LOG_ERR, errno, "Listen socket(%d) failed", fd);
-        return TC_ERROR;
-    }
-
-    return TC_OK;
-}
 
 int
 tc_socket_cmb_recv(int fd, int *num, char *buffer)

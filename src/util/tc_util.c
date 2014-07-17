@@ -1,11 +1,6 @@
 
 #include <xcopy.h>
 
-bool
-tcp_seq_before(uint32_t seq1, uint32_t seq2)
-{
-    return (int32_t)(seq1-seq2) < 0;
-}
 
 unsigned short
 csum(unsigned short *packet, int pack_len) 

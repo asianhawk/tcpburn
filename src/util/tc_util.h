@@ -11,7 +11,6 @@
 #define TCP_PAYLOAD_LENGTH(iph, tcph) \
         (ntohs(iph->tot_len) - IP_HDR_LEN(iph) - TCP_HDR_LEN(tcph))
 
-bool tcp_seq_before(uint32_t seq1, uint32_t seq2);
 unsigned short csum (unsigned short *packet, int pack_len);
 unsigned short tcpcsum(unsigned char *iphdr, unsigned short *packet,
         int pack_len);
