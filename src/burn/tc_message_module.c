@@ -48,9 +48,8 @@ tc_message_init(tc_event_loop_t *event_loop, uint32_t ip, uint16_t port)
 static int
 tc_process_server_msg(tc_event_t *rev)
 {
-    int            i, j;
+    int            i, j, num, k;
     connections_t *connections;
-    int            num, k;
     unsigned char *p, aggr_resp[COMB_LENGTH + sizeof(uint16_t)];
 
 

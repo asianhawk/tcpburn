@@ -19,8 +19,8 @@ int tc_log_init();
 void tc_log_end();
 
 void tc_log_info(int level, int err, const char *fmt, ...);
-void tc_log_trace(int level, int err, int flag, tc_ip_header_t *ip_header,
-        tc_tcp_header_t *tcp_header);
+void tc_log_trace(int level, int err, int flag, tc_iph_t *ip,
+        tc_tcph_t *tcp);
 
 #if (TC_DEBUG)
 
@@ -51,8 +51,8 @@ void tc_log_trace(int level, int err, int flag, tc_ip_header_t *ip_header,
 #define tc_log_debug8(level, err, fmt, a1, a2, a3, a4, a5, a6, a7, a8)       \
     tc_log_info(level, err, (const char *) fmt, a1, a2, a3, a4, a5, a6, a7, a8)
 
-#define tc_log_debug_trace(level, err, flag, ip_header, tcp_header)          \
-    tc_log_trace(level, err, flag, ip_header, tcp_header)
+#define tc_log_debug_trace(level, err, flag, ip, tcp)          \
+    tc_log_trace(level, err, flag, ip, tcp)
 
 #else
 
@@ -65,7 +65,7 @@ void tc_log_trace(int level, int err, int flag, tc_ip_header_t *ip_header,
 #define tc_log_debug6(level, err, fmt, a1, a2, a3, a4, a5, a6)
 #define tc_log_debug7(level, err, fmt, a1, a2, a3, a4, a5, a6, a7)
 #define tc_log_debug8(level, err, fmt, a1, a2, a3, a4, a5, a6, a7, a8)
-#define tc_log_debug_trace(level, err, flag, ip_header, tcp_header)
+#define tc_log_debug_trace(level, err, flag, ip, tcp)
 
 #endif /* TC_DEBUG */
 

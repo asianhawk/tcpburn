@@ -160,12 +160,12 @@ tc_init_sess_for_users()
 static void
 tc_init_sess_for_users()
 {
-    bool            is_find = false;
-    int             i, index = 0;
-    tc_user_t      *u;
-    tc_pool_t      *pool;
-    sess_data_t    *sess;
-    p_sess_entry    e = NULL, *aux_s_array;
+    bool          is_find = false;
+    int           i, index = 0;
+    tc_user_t    *u;
+    tc_pool_t    *pool;
+    sess_data_t  *sess;
+    p_sess_entry  e = NULL, *aux_s_array;
 
     if (s_table->num_of_sess == 0) {
         tc_log_info(LOG_ERR, 0, "no sess for replay");
@@ -307,7 +307,7 @@ tc_retrieve_active_user()
 tc_user_t *
 tc_retrieve_user(uint64_t key)
 {
-    int      index, i, min, max;
+    int  index, i, min, max;
 
     index = key % size_of_user_index;
 
@@ -620,11 +620,10 @@ send_stop(tc_user_t *u)
 static bool
 send_router_info(tc_user_t *u, uint16_t type)
 {
-    int                      i, fd;
-    bool                     result = false;
-    msg_client_t             msg;
-    connections_t           *connections;
-
+    int               i, fd;
+    bool              result = false;
+    msg_client_t      msg;
+    connections_t    *connections;
 
     memset(&msg, 0, sizeof(msg_client_t));
     msg.client_ip = u->src_addr;
@@ -665,13 +664,13 @@ send_router_info(tc_user_t *u, uint16_t type)
 
 
 static void
-fill_timestamp(tc_user_t *u, tc_tcp_header_t *tcp_header)
+fill_timestamp(tc_user_t *u, tc_tcph_t *tcp)
 {
-    uint32_t         timestamp;
-    unsigned char   *opt, *p; 
+    uint32_t        timestamp;
+    unsigned char  *opt, *p; 
 
-    p   = (unsigned char *) tcp_header;
-    opt = p + sizeof(tc_tcp_header_t);
+    p   = (unsigned char *) tcp;
+    opt = p + sizeof(tc_tcph_t);
     opt[0] = 1;
     opt[1] = 1;
     opt[2] = 8;
@@ -686,14 +685,14 @@ fill_timestamp(tc_user_t *u, tc_tcp_header_t *tcp_header)
 
 
 static void 
-update_timestamp(tc_user_t *u, tc_tcp_header_t *tcp_header)
+update_timestamp(tc_user_t *u, tc_tcph_t *tcp)
 {
     uint32_t       ts;
     unsigned int   opt, opt_len;
     unsigned char *p, *end;
 
-    p = ((unsigned char *) tcp_header) + TCP_HEADER_MIN_LEN;
-    end =  ((unsigned char *) tcp_header) + (tcp_header->doff << 2);  
+    p = ((unsigned char *) tcp) + TCP_HEADER_MIN_LEN;
+    end =  ((unsigned char *) tcp) + (tcp->doff << 2);  
     while (p < end) {
         opt = p[0];
         switch (opt) {
@@ -829,39 +828,37 @@ process_packet(tc_user_t *u, unsigned char *frame)
     bool                    result;
     uint16_t                size_ip, size_tcp, tot_len, cont_len;
     uint32_t                h_ack, h_last_ack;
-    tc_ip_header_t         *ip_header;
-    tc_tcp_header_t        *tcp_header;
+    tc_iph_t               *ip;
+    tc_tcph_t              *tcp;
     ip_port_pair_mapping_t *test;
 
-    ip_header  = (tc_ip_header_t *) (frame + ETHERNET_HDR_LEN);
-    size_ip    = ip_header->ihl << 2;
-    tcp_header = (tc_tcp_header_t *) ((char *) ip_header + size_ip);
-    size_tcp = tcp_header->doff << 2;
-    tot_len  = ntohs(ip_header->tot_len);
+    ip  = (tc_iph_t *) (frame + ETHERNET_HDR_LEN);
+    size_ip    = ip->ihl << 2;
+    tcp = (tc_tcph_t *) ((char *) ip + size_ip);
+    size_tcp = tcp->doff << 2;
+    tot_len  = ntohs(ip->tot_len);
     cont_len = tot_len - size_tcp - size_ip;
 
-    u->exp_seq = ntohl(tcp_header->seq);
+    u->exp_seq = ntohl(tcp->seq);
 
     if (u->dst_port == 0) {
-        test = get_test_pair(&(clt_settings.transfer), 
-                ip_header->daddr, tcp_header->dest);
+        test = get_test_pair(&(clt_settings.transfer), ip->daddr, tcp->dest);
         if (test == NULL) {
-            tc_log_info(LOG_NOTICE, 0, " test null:%u", 
-                    ntohs(tcp_header->dest));
-            tc_log_trace(LOG_WARN, 0, TO_BAKEND_FLAG, ip_header, tcp_header);
+            tc_log_info(LOG_NOTICE, 0, " test null:%u", ntohs(tcp->dest));
+            tc_log_trace(LOG_WARN, 0, TO_BAKEND_FLAG, ip, tcp);
             return false;
         }
         u->dst_addr = test->target_ip;
         u->dst_port = test->target_port;
 #if (TC_PCAP_SEND)
-        u->src_mac       = test->src_mac;
-        u->dst_mac       = test->dst_mac;
+        u->src_mac  = test->src_mac;
+        u->dst_mac  = test->dst_mac;
 #endif
     }
 
     if (u->state.last_ack_recorded) {
         if (u->state.status < SEND_REQ && (u->state.status & SYN_CONFIRM)) {
-            h_ack = ntohl(tcp_header->ack_seq);
+            h_ack = ntohl(tcp->ack_seq);
             h_last_ack = ntohl(u->history_last_ack_seq);
             if (after(h_ack, h_last_ack)) {
                 tc_log_debug1(LOG_DEBUG, 0, "server resp first, wait, p:%u", 
@@ -872,19 +869,19 @@ process_packet(tc_user_t *u, unsigned char *frame)
         }
     }
 
-    ip_header->saddr = u->src_addr;
-    tcp_header->source = u->src_port;
-    u->history_last_ack_seq = tcp_header->ack_seq;
+    ip->saddr = u->src_addr;
+    tcp->source = u->src_port;
+    u->history_last_ack_seq = tcp->ack_seq;
     u->state.last_ack_recorded = 1;
-    tcp_header->ack_seq = u->exp_ack_seq;
-    ip_header->daddr = u->dst_addr;
-    tcp_header->dest = u->dst_port;
+    tcp->ack_seq = u->exp_ack_seq;
+    ip->daddr = u->dst_addr;
+    tcp->dest = u->dst_port;
 
     tc_log_debug2(LOG_DEBUG, 0, "set ack seq:%u, p:%u",
             ntohl(u->exp_ack_seq), ntohs(u->src_port));
 
     tc_stat.packs_sent_cnt++;
-    if (tcp_header->syn) {
+    if (tcp->syn) {
         tc_log_debug2(LOG_INFO, 0, "rtt:%ld, p:%u", u->rtt, ntohs(u->src_port));
         tc_stat.syn_sent_cnt++;
 #if (!TC_SINGLE)
@@ -897,10 +894,10 @@ process_packet(tc_user_t *u, unsigned char *frame)
 #endif
         u->state.last_ack_recorded = 0;
         u->state.status  |= SYN_SENT;
-    } else if (tcp_header->fin) {
+    } else if (tcp->fin) {
         tc_stat.fin_sent_cnt++;
         u->state.status  |= CLIENT_FIN;
-    } else if (tcp_header->rst) {
+    } else if (tcp->rst) {
         tc_stat.rst_sent_cnt++;
         u->state.status  |= CLIENT_FIN;
         u->state.over = 1;
@@ -921,21 +918,20 @@ process_packet(tc_user_t *u, unsigned char *frame)
         }  
     }
     if (u->state.timestamped) {
-        update_timestamp(u, tcp_header);
+        update_timestamp(u, tcp);
     }
 
-    tcp_header->check = 0;
-    tcp_header->check = tcpcsum((unsigned char *) ip_header,
-            (unsigned short *) tcp_header, (int) (tot_len - size_ip));
+    tcp->check = 0;
+    tcp->check = tcpcsum((unsigned char *) ip,
+            (unsigned short *) tcp, (int) (tot_len - size_ip));
 #if (TC_PCAP_SEND)
-    ip_header->check = 0;
-    ip_header->check = csum((unsigned short *) ip_header,size_ip);
+    ip->check = 0;
+    ip->check = csum((unsigned short *) ip, size_ip);
 #endif
-    tc_log_debug_trace(LOG_DEBUG, 0, TO_BAKEND_FLAG, ip_header, tcp_header);
+    tc_log_debug_trace(LOG_DEBUG, 0, TO_BAKEND_FLAG, ip, tcp);
 
 #if (!TC_PCAP_SEND)
-    result = tc_raw_socket_send(tc_raw_socket_out, ip_header, tot_len,
-            ip_header->daddr);
+    result = tc_raw_socket_send(tc_raw_socket_out, ip, tot_len, ip->daddr);
 #else
     fill_frame((struct ethernet_hdr *) frame, u->src_mac, u->dst_mac);
     result = tc_pcap_send(frame, tot_len + ETHERNET_HDR_LEN);
@@ -945,8 +941,8 @@ process_packet(tc_user_t *u, unsigned char *frame)
         u->last_sent_time = tc_time();
         return true;
     } else {
-        tc_log_info(LOG_ERR, 0, "send to back error,tot_len is:%d,cont_len:%d",
-                tot_len,cont_len);
+        tc_log_info(LOG_ERR, 0, "send error,tot_len:%d,cont_len:%d", 
+                tot_len, cont_len);
 #if (!TCPCOPY_PCAP_SEND)
         tc_raw_socket_out = TC_INVALID_SOCKET;
 #endif
@@ -977,17 +973,15 @@ process_user_packet(tc_user_t *u)
         u->total_packets_sent++;
         u->orig_frame = u->orig_frame->next;
 
-
         if (send_stop(u)) {
             break;
         }
-        tc_log_debug1(LOG_DEBUG, 0, "check resp waiting:%u",
-                ntohs(u->src_port));
+        tc_log_debug1(LOG_INFO, 0, "check resp wait:%u", ntohs(u->src_port));
         if (!u->orig_frame->belong_to_the_same_req) {
             tc_log_debug2(LOG_DEBUG, 0, "user state:%d,port:%u",
                 u->state.status, ntohs(u->src_port));
             if (u->state.status & SYN_CONFIRM) {
-                tc_log_debug1(LOG_DEBUG, 0, "set resp waiting:%u",
+                tc_log_debug1(LOG_DEBUG, 0, "set resp wait:%u", 
                         ntohs(u->src_port));
                 u->state.resp_waiting = 1;
             }
@@ -1004,31 +998,31 @@ process_user_packet(tc_user_t *u)
 static void 
 send_faked_rst(tc_user_t *u)
 {
-    tc_ip_header_t   *ip_header;
-    tc_tcp_header_t  *tcp_header;
+    tc_iph_t   *ip;
+    tc_tcph_t  *tcp;
     unsigned char    *p, frame[FAKE_FRAME_LEN];
 
     memset(frame, 0, FAKE_FRAME_LEN);
     p = frame + ETHERNET_HDR_LEN;
-    ip_header  = (tc_ip_header_t *) p;
-    tcp_header = (tc_tcp_header_t *) (p + IP_HEADER_LEN);
+    ip  = (tc_iph_t *) p;
+    tcp = (tc_tcph_t *) (p + IP_HEADER_LEN);
 
-    ip_header->version  = 4;
-    ip_header->ihl      = IP_HEADER_LEN/4;
-    ip_header->frag_off = htons(IP_DF); 
-    ip_header->ttl      = 64; 
-    ip_header->protocol = IPPROTO_TCP;
-    ip_header->tot_len  = htons(FAKE_MIN_IP_DATAGRAM_LEN);
-    ip_header->saddr    = u->src_addr;
-    ip_header->daddr    = u->dst_addr;
-    tcp_header->source  = u->src_port;
-    tcp_header->dest    = u->dst_port;
-    tcp_header->seq     = htonl(u->last_ack_seq);
-    tcp_header->ack_seq = u->exp_ack_seq;
-    tcp_header->window  = 65535; 
-    tcp_header->ack     = 1;
-    tcp_header->rst     = 1;
-    tcp_header->doff    = TCP_HEADER_DOFF_MIN_VALUE;
+    ip->version  = 4;
+    ip->ihl      = IP_HEADER_LEN/4;
+    ip->frag_off = htons(IP_DF); 
+    ip->ttl      = 64; 
+    ip->protocol = IPPROTO_TCP;
+    ip->tot_len  = htons(FAKE_MIN_IP_DATAGRAM_LEN);
+    ip->saddr    = u->src_addr;
+    ip->daddr    = u->dst_addr;
+    tcp->source  = u->src_port;
+    tcp->dest    = u->dst_port;
+    tcp->seq     = htonl(u->last_ack_seq);
+    tcp->ack_seq = u->exp_ack_seq;
+    tcp->window  = 65535; 
+    tcp->ack     = 1;
+    tcp->rst     = 1;
+    tcp->doff    = TCP_HEADER_DOFF_MIN_VALUE;
 
     process_packet(u, frame);
 }
@@ -1037,35 +1031,35 @@ send_faked_rst(tc_user_t *u)
 static void 
 send_faked_ack(tc_user_t *u)
 {
-    tc_ip_header_t   *ip_header;
-    tc_tcp_header_t  *tcp_header;
+    tc_iph_t   *ip;
+    tc_tcph_t  *tcp;
     unsigned char    *p, frame[FAKE_FRAME_LEN];
 
     memset(frame, 0, FAKE_FRAME_LEN);
     p = frame + ETHERNET_HDR_LEN;
-    ip_header  = (tc_ip_header_t *) p;
-    tcp_header = (tc_tcp_header_t *) (p + IP_HEADER_LEN);
+    ip  = (tc_iph_t *) p;
+    tcp = (tc_tcph_t *) (p + IP_HEADER_LEN);
 
-    ip_header->version  = 4;
-    ip_header->ihl      = IP_HEADER_LEN/4;
-    ip_header->frag_off = htons(IP_DF); 
-    ip_header->ttl      = 64; 
-    ip_header->protocol = IPPROTO_TCP;
-    ip_header->saddr    = u->src_addr;
-    ip_header->daddr    = u->dst_addr;
-    tcp_header->source  = u->src_port;
-    tcp_header->dest    = u->dst_port;
-    tcp_header->seq     = htonl(u->last_ack_seq);
-    tcp_header->ack_seq = u->exp_ack_seq;
-    tcp_header->window  = 65535; 
-    tcp_header->ack     = 1;
+    ip->version  = 4;
+    ip->ihl      = IP_HEADER_LEN/4;
+    ip->frag_off = htons(IP_DF); 
+    ip->ttl      = 64; 
+    ip->protocol = IPPROTO_TCP;
+    ip->saddr    = u->src_addr;
+    ip->daddr    = u->dst_addr;
+    tcp->source  = u->src_port;
+    tcp->dest    = u->dst_port;
+    tcp->seq     = htonl(u->last_ack_seq);
+    tcp->ack_seq = u->exp_ack_seq;
+    tcp->window  = 65535; 
+    tcp->ack     = 1;
     if (u->state.timestamped) {
-        ip_header->tot_len  = htons(FAKE_IP_TS_DATAGRAM_LEN);
-        tcp_header->doff    = TCP_HEADER_DOFF_TS_VALUE;
-        fill_timestamp(u, tcp_header);
+        ip->tot_len  = htons(FAKE_IP_TS_DATAGRAM_LEN);
+        tcp->doff    = TCP_HEADER_DOFF_TS_VALUE;
+        fill_timestamp(u, tcp);
     } else {
-        ip_header->tot_len  = htons(FAKE_MIN_IP_DATAGRAM_LEN);
-        tcp_header->doff    = TCP_HEADER_DOFF_MIN_VALUE;
+        ip->tot_len  = htons(FAKE_MIN_IP_DATAGRAM_LEN);
+        tcp->doff    = TCP_HEADER_DOFF_MIN_VALUE;
     }
 
     process_packet(u, frame);
@@ -1075,7 +1069,7 @@ send_faked_ack(tc_user_t *u)
 static void
 retransmit(tc_user_t *u, uint32_t cur_ack_seq)
 {
-    frame_t          *unack_frame, *next;
+    frame_t  *unack_frame, *next;
 
     unack_frame = u->orig_unack_frame;
     if (unack_frame == NULL) {
@@ -1115,7 +1109,7 @@ retransmit(tc_user_t *u, uint32_t cur_ack_seq)
 static void
 update_ack_packets(tc_user_t *u, uint32_t cur_ack_seq)
 {
-    frame_t          *unack_frame, *next;
+    frame_t   *unack_frame, *next;
 
     unack_frame = u->orig_unack_frame;
     if (unack_frame == NULL) {
@@ -1138,8 +1132,7 @@ update_ack_packets(tc_user_t *u, uint32_t cur_ack_seq)
                         ntohs(u->src_port));
                 break;
             } else {    
-                tc_log_debug1(LOG_DEBUG, 0, "skipped:%u", 
-                        ntohs(u->src_port));
+                tc_log_debug1(LOG_DEBUG, 0, "skipped:%u", ntohs(u->src_port));
                 unack_frame = next;
                 next = unack_frame->next;
                 if (unack_frame == u->orig_sess->last_frame) {
@@ -1154,19 +1147,18 @@ update_ack_packets(tc_user_t *u, uint32_t cur_ack_seq)
             break;
         }
     }
-
 }
 
 
 static void         
-retrieve_options(tc_user_t *u, int direction, tc_tcp_header_t *tcp_header)
+retrieve_options(tc_user_t *u, int direction, tc_tcph_t *tcp)
 {                   
     uint32_t       ts_value; 
     unsigned int   opt, opt_len;
     unsigned char *p, *end;
 
-    p = ((unsigned char *) tcp_header) + TCP_HEADER_MIN_LEN;
-    end =  ((unsigned char *) tcp_header) + (tcp_header->doff << 2);  
+    p = ((unsigned char *) tcp) + TCP_HEADER_MIN_LEN;
+    end =  ((unsigned char *) tcp) + (tcp->doff << 2);  
     while (p < end) {
         opt = p[0];
         switch (opt) {
@@ -1193,7 +1185,7 @@ retrieve_options(tc_user_t *u, int direction, tc_tcp_header_t *tcp_header)
                 } else {
                     u->ts_ec_r  = EXTRACT_32BITS(p + 2);
                     ts_value = EXTRACT_32BITS(p + 6);
-                    if (tcp_header->syn) {
+                    if (tcp->syn) {
                         u->state.timestamped = 1;
                         tc_log_debug1(LOG_DEBUG, 0, "timestamped,p=%u", 
                                 ntohs(u->src_port));
@@ -1230,43 +1222,43 @@ retrieve_options(tc_user_t *u, int direction, tc_tcp_header_t *tcp_header)
 void 
 process_outgress(unsigned char *packet)
 {
-    uint16_t           size_ip, size_tcp, tot_len, cont_len;
-    uint32_t           seq, ack_seq, clt_next_ack_seq;
-    uint64_t           key;
-    tc_user_t         *u;
-    tc_ip_header_t    *ip_header;
-    tc_tcp_header_t   *tcp_header;
+    uint16_t     size_ip, size_tcp, tot_len, cont_len;
+    uint32_t     seq, ack_seq, cur_target_ack_seq, last_target_ack_seq;
+    uint64_t     key;
+    tc_user_t   *u;
+    tc_iph_t    *ip;
+    tc_tcph_t   *tcp;
 
     last_resp_time = tc_time();
     tc_stat.resp_cnt++;
-    ip_header  = (tc_ip_header_t *) packet;
-    size_ip    = ip_header->ihl << 2;
-    tcp_header = (tc_tcp_header_t *) ((char *) ip_header + size_ip);
+    ip  = (tc_iph_t *) packet;
+    size_ip    = ip->ihl << 2;
+    tcp = (tc_tcph_t *) ((char *) ip + size_ip);
 
-    key = tc_get_key(ip_header->daddr, tcp_header->dest);
+    key = tc_get_key(ip->daddr, tcp->dest);
     tc_log_debug1(LOG_DEBUG, 0, "key from bak:%llu", key);
     u = tc_retrieve_user(key);
 
     if (u != NULL) {
 
-        tc_log_debug_trace(LOG_DEBUG, 0, BACKEND_FLAG, ip_header, tcp_header);
-        u->srv_window = ntohs(tcp_header->window);
+        tc_log_debug_trace(LOG_DEBUG, 0, BACKEND_FLAG, ip, tcp);
+        u->srv_window = ntohs(tcp->window);
         if (u->wscale) {
             u->srv_window = u->srv_window << (u->wscale);
             tc_log_debug1(LOG_DEBUG, 0, "window size:%u", u->srv_window);
         }
         if (u->state.timestamped) {
-            retrieve_options(u, REMOTE, tcp_header);
+            retrieve_options(u, REMOTE, tcp);
         }
-        size_tcp = tcp_header->doff << 2;
-        tot_len  = ntohs(ip_header->tot_len);
+        size_tcp = tcp->doff << 2;
+        tot_len  = ntohs(ip->tot_len);
         cont_len = tot_len - size_tcp - size_ip;
 
-        if (ip_header->daddr != u->src_addr || tcp_header->dest!= u->src_port) {
+        if (ip->daddr != u->src_addr || tcp->dest != u->src_port) {
             tc_log_info(LOG_NOTICE, 0, "key conflict");
         }
-        seq = ntohl(tcp_header->seq);
-        ack_seq = ntohl(tcp_header->ack_seq);
+        seq = ntohl(tcp->seq);
+        ack_seq = ntohl(tcp->ack_seq);
 
         if (u->last_seq == seq && u->last_ack_seq == ack_seq) {
             u->fast_retransmit_cnt++;
@@ -1286,9 +1278,10 @@ process_outgress(unsigned char *packet)
             u->last_recv_resp_cont_time = tc_milliscond_time();
             tc_stat.resp_cont_cnt++;
             u->state.resp_waiting = 0;   
-            clt_next_ack_seq = htonl(seq + cont_len);
-            if (after(clt_next_ack_seq, u->exp_ack_seq) || tcp_header->fin) {
-                u->exp_ack_seq = clt_next_ack_seq;
+            cur_target_ack_seq = seq + cont_len;
+            last_target_ack_seq = ntohl(u->exp_ack_seq);
+            if (after(cur_target_ack_seq, last_target_ack_seq) || tcp->fin) {
+                u->exp_ack_seq = htonl(cur_target_ack_seq);
                 utimer_disp(u, u->rtt, TYPE_DELAY_ACK);
                 tc_log_debug1(LOG_INFO, 0, "timer set:%u", ntohs(u->src_port));
             } else {
@@ -1297,10 +1290,10 @@ process_outgress(unsigned char *packet)
                         u->rtt, ntohs(u->src_port));
             }
         } else {
-            u->exp_ack_seq = tcp_header->seq;
+            u->exp_ack_seq = tcp->seq;
         }
         
-        if (tcp_header->syn) {
+        if (tcp->syn) {
             tc_log_debug1(LOG_DEBUG, 0, "recv syn from back:%u", 
                     ntohs(u->src_port));
             u->exp_ack_seq = htonl(ntohl(u->exp_ack_seq) + 1);
@@ -1312,7 +1305,7 @@ process_outgress(unsigned char *packet)
                 tc_log_debug2(LOG_DEBUG, 0, "exp ack seq:%u, p:%u",
                         ntohl(u->exp_ack_seq), ntohs(u->src_port));
                 if (size_tcp > TCP_HEADER_MIN_LEN) {
-                    retrieve_options(u, REMOTE, tcp_header);
+                    retrieve_options(u, REMOTE, tcp);
                     if (u->wscale > 0) {
                         tc_log_debug2(LOG_DEBUG, 0, "wscale:%u, p:%u",
                                 u->wscale, ntohs(u->src_port));
@@ -1326,7 +1319,7 @@ process_outgress(unsigned char *packet)
                 tc_log_debug1(LOG_DEBUG, 0, "syn, but already syn received:%u",
                     ntohs(u->src_port));
             }
-        } else if (tcp_header->fin) {
+        } else if (tcp->fin) {
             tc_log_debug1(LOG_DEBUG, 0, "recv fin from back:%u", 
                     ntohs(u->src_port));
             u->exp_ack_seq = htonl(ntohl(u->exp_ack_seq) + 1);
@@ -1347,7 +1340,7 @@ process_outgress(unsigned char *packet)
             }
             tc_stat.fin_recv_cnt++;
 
-        } else if (tcp_header->rst) {
+        } else if (tcp->rst) {
             tc_log_info(LOG_NOTICE, 0, "recv rst from back:%u", 
                     ntohs(u->src_port));
             tc_stat.rst_recv_cnt++;
@@ -1362,11 +1355,9 @@ process_outgress(unsigned char *packet)
         }
 
     } else {
-        tc_log_debug_trace(LOG_DEBUG, 0, BACKEND_FLAG, ip_header,
-                tcp_header);
+        tc_log_debug_trace(LOG_DEBUG, 0, BACKEND_FLAG, ip, tcp);
         tc_log_debug0(LOG_DEBUG, 0, "no active sess for me");
     }
-
 }
 
 
@@ -1409,7 +1400,6 @@ could_start_sess(tc_user_t *u)
         tc_log_info(LOG_ERR, 0, "topo previous sess is null");
         return false;
     }
-
 }
 #endif
 

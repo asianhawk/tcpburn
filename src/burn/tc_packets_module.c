@@ -215,25 +215,25 @@ dispose_packet(unsigned char *frame, int frame_len, int ip_recv_len)
     uint32_t         seq, tmp_seq, ack_seq;
     uint64_t         key;
     unsigned char   *packet;
-    tc_ip_header_t  *ip_header;
-    tc_tcp_header_t *tcp_header;
+    tc_iph_t  *ip;
+    tc_tcph_t *tcp;
 
     packet = frame + ETHERNET_HDR_LEN;
 
-    ip_header   = (tc_ip_header_t *) packet;
+    ip   = (tc_iph_t *) packet;
 
     packets_cnt++;
-    if (ip_header->protocol != IPPROTO_TCP) {
+    if (ip->protocol != IPPROTO_TCP) {
         return TC_ERROR;
     }    
 
-    size_ip = ip_header->ihl << 2;
+    size_ip = ip->ihl << 2;
     if (size_ip < 20) {
         tc_log_info(LOG_WARN, 0, "Invalid IP header length: %d", size_ip);
         return TC_ERROR;
     }
-    tcp_header  = (tc_tcp_header_t *) ((char *) ip_header + size_ip);
-    size_tcp    = tcp_header->doff << 2;
+    tcp  = (tc_tcph_t *) ((char *) ip + size_ip);
+    size_tcp    = tcp->doff << 2;
 
     if (size_tcp < 20) {
         tc_log_info(LOG_WARN, 0, "Invalid TCP header len: %d bytes", size_tcp);
@@ -241,14 +241,14 @@ dispose_packet(unsigned char *frame, int frame_len, int ip_recv_len)
     }
 
     if (LOCAL == check_pack_src(&(clt_settings.transfer), 
-                ip_header->daddr, tcp_header->dest, CHECK_DEST)) {
+                ip->daddr, tcp->dest, CHECK_DEST)) {
         if (clt_settings.target_localhost) {
-            if (ip_header->saddr != LOCALHOST) {
+            if (ip->saddr != LOCALHOST) {
                 tc_log_info(LOG_WARN, 0, "not localhost source ip address");
                 return TC_ERROR;
             }
         }
-        tot_len  = ntohs(ip_header -> tot_len);
+        tot_len  = ntohs(ip -> tot_len);
         head_len = size_tcp + size_ip;
         if (tot_len < head_len) {
             tc_log_info(LOG_WARN, 0, "bad tot_len:%d bytes, header len:%d",
@@ -260,11 +260,11 @@ dispose_packet(unsigned char *frame, int frame_len, int ip_recv_len)
     }
 
 #if (TC_DEBUG)
-    tc_log_trace(LOG_NOTICE, 0, CLIENT_FLAG, ip_header, tcp_header);
+    tc_log_trace(LOG_NOTICE, 0, CLIENT_FLAG, ip, tcp);
 #endif
-    if (tcp_header->syn) {
+    if (tcp->syn) {
         status = SYN_SENT;
-    } else if (tcp_header->fin || tcp_header->rst) {
+    } else if (tcp->fin || tcp->rst) {
         status = CLIENT_FIN;
 #if (TC_COMET)
         saved = false;
@@ -272,9 +272,9 @@ dispose_packet(unsigned char *frame, int frame_len, int ip_recv_len)
     } 
 
     packets_considered_cnt++;
-    key = tc_get_key(ip_header->saddr, tcp_header->source);
-    ack_seq = ntohl(tcp_header->ack_seq);
-    seq = ntohl(tcp_header->seq);
+    key = tc_get_key(ip->saddr, tcp->source);
+    ack_seq = ntohl(tcp->ack_seq);
+    seq = ntohl(tcp->seq);
 
     cont_len    = tot_len - size_tcp - size_ip;
     if (cont_len > 0) {
@@ -297,22 +297,22 @@ dispose_packet(unsigned char *frame, int frame_len, int ip_recv_len)
         max_payload = clt_settings.mtu - head_len;
         packet_num  = (cont_len + max_payload - 1)/max_payload;
         last        = packet_num - 1;
-        id          = ip_header->id;
+        id          = ip->id;
 
 
         tc_log_debug1(LOG_DEBUG, 0, "recv:%d, more than MTU", ip_recv_len);
         index = head_len;
 
         for (i = 0 ; i < packet_num; i++) {
-            tcp_header->seq = htonl(seq + i * max_payload);
+            tcp->seq = htonl(seq + i * max_payload);
             if (i != last) {
                 pack_len  = clt_settings.mtu;
             } else {
                 pack_len += (cont_len - packet_num * max_payload);
             }
             payload_len = pack_len - head_len;
-            ip_header->tot_len = htons(pack_len);
-            ip_header->id = id++;
+            ip->tot_len = htons(pack_len);
+            ip->id = id++;
             p = buf + ETHERNET_HDR_LEN;
             /* copy header here */
             memcpy(p, (char *) packet, head_len);
@@ -321,14 +321,14 @@ dispose_packet(unsigned char *frame, int frame_len, int ip_recv_len)
             memcpy(p, (char *) (packet + index), payload_len);
             index = index + payload_len;
 
-            tmp_seq = ntohl(tcp_header->seq);
+            tmp_seq = ntohl(tcp->seq);
             record_packet(key, (unsigned char *) buf,
                     ETHERNET_HDR_LEN + pack_len, tmp_seq, ack_seq, 
-                    tcp_header->source, saved, cont_len, status);
+                    tcp->source, saved, cont_len, status);
         }
     } else {
         record_packet(key, frame, frame_len, seq, ack_seq, 
-                tcp_header->source, saved, cont_len, status);
+                tcp->source, saved, cont_len, status);
     }
 
     return TC_OK;
@@ -476,9 +476,9 @@ calculate_mem_pool_size(char *pcap_file, char *filter)
     bool                stop = false;
     pcap_t             *pcap;
     uint16_t            size_ip, size_tcp;
+    tc_iph_t           *ip;
+    tc_tcph_t          *tcp;
     unsigned char      *pkt_data,*ip_data;
-    tc_ip_header_t     *ip_header;
-    tc_tcp_header_t    *tcp_header;
     struct bpf_program  fp;
     struct pcap_pkthdr  pkt_hdr;  
 
@@ -522,26 +522,26 @@ calculate_mem_pool_size(char *pcap_file, char *filter)
                 }
 
                 if (ip_data != NULL) {
-                    ip_header   = (tc_ip_header_t *) ip_data;
-                    if (ip_header->protocol != IPPROTO_TCP) {
+                    ip   = (tc_iph_t *) ip_data;
+                    if (ip->protocol != IPPROTO_TCP) {
                         continue;
                     }    
-                    size_ip = ip_header->ihl << 2;
+                    size_ip = ip->ihl << 2;
                     if (size_ip < 20) {
                         continue;
                     }
-                    tcp_header = (tc_tcp_header_t *) (ip_data + size_ip);
-                    size_tcp   = tcp_header->doff << 2;
+                    tcp = (tc_tcph_t *) (ip_data + size_ip);
+                    size_tcp   = tcp->doff << 2;
                     if (size_tcp < 20) {
                         continue;
                     }
                     if (LOCAL != check_pack_src(&(clt_settings.transfer), 
-                                ip_header->daddr, tcp_header->dest, CHECK_DEST)) 
+                                ip->daddr, tcp->dest, CHECK_DEST)) 
                     {
                         continue;
                     }
 
-                    if (tcp_header->syn) {
+                    if (tcp->syn) {
                         aligned_len = sizeof(sess_entry_t);
                         aligned_len = tc_align(aligned_len, TC_ALIGNMENT);
                         clt_settings.mem_pool_size += aligned_len;
@@ -602,8 +602,7 @@ set_topo_for_sess()
             diff = cur_sess->first_pcap_time - prev_sess->first_pcap_time;
             if (tc_abs(diff) < clt_settings.topo_time_diff) {
                 cur_sess->delayed = 1;
-                tc_log_debug2(LOG_NOTICE, 0, "sess %d and %d are related",
-                        i, i + 1);
+                tc_log_debug2(LOG_NOTICE, 0, "sess %d %d related", i, i + 1);
             }
             prev = cur;
             cur = cur->next;
@@ -615,3 +614,4 @@ set_topo_for_sess()
     }
 }
 #endif
+

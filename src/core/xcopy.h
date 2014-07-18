@@ -117,8 +117,8 @@ typedef struct tc_buf_s         tc_buf_t;
 
 typedef volatile sig_atomic_t tc_atomic_t;
 
-typedef struct iphdr  tc_ip_header_t;
-typedef struct tcphdr tc_tcp_header_t;
+typedef struct iphdr  tc_iph_t;
+typedef struct tcphdr tc_tcph_t;
 
 /* 
  * the 40 bytes available for TCP options 
@@ -127,7 +127,7 @@ typedef struct tcphdr tc_tcp_header_t;
 #define MAX_OPTION_LEN 24
 #define TCPOPT_WSCALE 3
 
-#define RESP_HEADER_SIZE (sizeof(tc_ip_header_t) + sizeof(tc_tcp_header_t) + MAX_OPTION_LEN)
+#define RESP_HEADER_SIZE (sizeof(tc_iph_t) + sizeof(tc_tcph_t) + MAX_OPTION_LEN)
 #define RESP_MAX_USEFUL_SIZE RESP_HEADER_SIZE
 
 /* bool constants */
@@ -171,8 +171,8 @@ enum packet_classification{
 #define ETHERNET_HDR_LEN (sizeof(struct ethernet_hdr))
 #define DEFAULT_DEVICE     "any"
 
-#define IP_HEADER_LEN sizeof(tc_ip_header_t)
-#define TCP_HEADER_MIN_LEN sizeof(tc_tcp_header_t)
+#define IP_HEADER_LEN sizeof(tc_iph_t)
+#define TCP_HEADER_MIN_LEN sizeof(tc_tcph_t)
 #define FAKE_FRAME_LEN (60 + ETHERNET_HDR_LEN)
 #define FAKE_MIN_IP_DATAGRAM_LEN (IP_HEADER_LEN + (TCP_HEADER_DOFF_MIN_VALUE << 2))
 #define FAKE_IP_TS_DATAGRAM_LEN (IP_HEADER_LEN + (TCP_HEADER_DOFF_TS_VALUE << 2))
