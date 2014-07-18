@@ -116,6 +116,7 @@ typedef struct xcopy_clt_settings {
     uint32_t      valid_ips[M_CLIENT_IP_NUM];              
     int           users;
     int           throughput_factor;   
+    int           accelerated_times;   
     char         *raw_pcap_files;          
     char         *filter;          
     tc_pcap_file  pcap_files[MAX_PCAP_FILES]; 
@@ -123,7 +124,6 @@ typedef struct xcopy_clt_settings {
     int           conn_init_sp_fact;
     long          pcap_time;
     pcap_t       *pcap;
-    uint64_t      interval;            /* accelerated times */
 #if (TC_PCAP_SEND)
     char         *output_if_name;
 #endif

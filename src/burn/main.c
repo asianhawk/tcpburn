@@ -69,7 +69,8 @@ usage(void)
 #if (TC_TOPO)
     printf("-T <num>       topology time diff(default 6)\n");
 #endif
-    printf("-a <num>       throughput factor(default 1)\n");
+    printf("-a <num>       accelerated times for replay\n");
+    printf("-A <num>       throughput factor(default 1)\n");
     printf("-i <num>       connection init speed fact(default 1024 connectins per second)\n");
     printf("-S <num>       MSS value sent back(default 1460)\n");
     printf("-C <num>       parallel connections between burn and intercept.\n"
@@ -106,8 +107,8 @@ read_args(int argc, char **argv)
          "f:" /* input pcap file list */
          "F:" 
          "c:" /* client ip list */
-         "a:" /* throughput factor */
-         "I:" /* threshold interval time for acceleratation */
+         "a:" 
+         "A:" /* throughput factor */
          "i:" 
 #if (TC_PCAP_SEND)
          "o:" /* <device,> */
@@ -142,13 +143,13 @@ read_args(int argc, char **argv)
                 clt_settings.filter = optarg;
                 break;
             case 'a':
+                clt_settings.accelerated_times = atoi(optarg);
+                break;
+            case 'A':
                 clt_settings.throughput_factor = atoi(optarg);
                 break;
             case 'c':
                 clt_settings.raw_clt_ips = optarg;
-                break;
-            case 'I':
-                clt_settings.interval = atoi(optarg);
                 break;
 #if (TC_TOPO)
             case 'T':
@@ -235,6 +236,8 @@ read_args(int argc, char **argv)
 #endif
                     case 'S':
                     case 't':
+                    case 'a':
+                    case 'A':
                     case 'e':
                     case 'p':
                         fprintf(stderr, "burn: option -%c require a number\n",
@@ -687,12 +690,12 @@ set_details()
         clt_settings.throughput_factor = 1;
     }
 
-    tc_log_info(LOG_NOTICE, 0, "throughput factor: %d,interval:%llu ms",
-            clt_settings.throughput_factor, clt_settings.interval);
-
-    if (clt_settings.interval > 0) {
-        clt_settings.interval = clt_settings.interval * 1000;
+    if (clt_settings.accelerated_times < 1) {
+        clt_settings.accelerated_times = 1;
     }
+
+    tc_log_info(LOG_NOTICE, 0, "throughput factor:%d,accelerate:%d",
+            clt_settings.throughput_factor, clt_settings.accelerated_times);
 
     if (clt_settings.conn_init_sp_fact <= 0) {
         clt_settings.conn_init_sp_fact = DEFAULT_CONN_INIT_SP_FACT;

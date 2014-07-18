@@ -74,9 +74,9 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
         uint32_t ack_seq, uint16_t src_port, bool saved, 
         uint16_t cont_len, int status)
 {
-    frame_t      *fr      = NULL;
-    sess_data_t  *session = NULL;
-    p_sess_entry  entry   = NULL;
+    frame_t      *fr;
+    sess_data_t  *sess;
+    p_sess_entry  entry;
 #if (TC_TOPO)  
     p_link_node   ln;
 #endif
@@ -114,58 +114,61 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
         sess_created++;
         entry->key = key;
         
-        session = &(entry->data);
+        sess = &(entry->data);
 
-        session->first_pcap_time = clt_settings.pcap_time;
-        session->last_pcap_time = clt_settings.pcap_time;
-        session->rtt = clt_settings.pcap_time;
-        session->rtt_init = 1;
-        session->first_frame = fr;
-        session->frames = 1;
-        session->last_frame = fr;
-        session->last_ack_seq = ack_seq;
-        session->status = SYN_SENT;
+        sess->first_pcap_time = clt_settings.pcap_time;
+        sess->last_pcap_time = clt_settings.pcap_time;
+        sess->rtt = clt_settings.pcap_time;
+        sess->rtt_init = 1;
+        sess->first_frame = fr;
+        sess->frames = 1;
+        sess->last_frame = fr;
+        sess->last_ack_seq = ack_seq;
+        sess->status = SYN_SENT;
         tc_add_sess(entry);
 #if (TC_TOPO)
-        ln = link_node_malloc(clt_settings.pool, session);
+        ln = link_node_malloc(clt_settings.pool, sess);
         ln->key = clt_settings.pcap_time;
         link_list_append_by_order(clt_settings.s_list, ln);
 #endif
 
     } else {
 
-        session = &(entry->data);
-        session->status |= status;
+        sess = &(entry->data);
+        sess->status |= status;
 
-        if (!session->rtt_calculated) {
-            if (session->rtt_init) {
-                if (clt_settings.pcap_time > session->rtt) {
-                    session->rtt = clt_settings.pcap_time - session->rtt;
+        if (!sess->rtt_calculated) {
+            if (sess->rtt_init) {
+                if (clt_settings.pcap_time > sess->rtt) {
+                    sess->rtt = clt_settings.pcap_time - sess->rtt;
+                    if (clt_settings.accelerated_times > 1) {
+                        sess->rtt /= clt_settings.accelerated_times;
+                    }
                 } else {
-                    session->rtt = 1;
+                    sess->rtt = 1;
                 }
             } else {
                 tc_log_info(LOG_WARN, 0, "rtt wrong");
-                session->rtt = 1;
+                sess->rtt = 1;
             }
-            session->rtt_calculated = 1;
-            tc_log_debug1(LOG_INFO, 0, "rtt:%ld", session->rtt);
+            sess->rtt_calculated = 1;
+            tc_log_debug1(LOG_INFO, 0, "rtt:%ld", sess->rtt);
         }
 
         if (cont_len > 0) {
-            session->has_req = 1;
-        } else if ((session->status & SEND_REQ) && 
-                (!(session->status & CLIENT_FIN))) 
+            sess->has_req = 1;
+        } else if ((sess->status & SEND_REQ) && 
+                (!(sess->status & CLIENT_FIN))) 
         {
             tc_log_debug1(LOG_DEBUG, 0, "dropped:%u", ntohs(src_port));
             return;
         }
 
         if (!saved) {
-            session->end = 1;
+            sess->end = 1;
         }
 
-        if (!session->end) {
+        if (!sess->end) {
         
             fr = (frame_t *) alloc_pool_mem(sizeof(frame_t));
             if (fr == NULL) {
@@ -181,23 +184,26 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
             fr->frame_len = frame_len;
             fr->seq = seq;
 
-            append_by_order(session, fr);
+            append_by_order(sess, fr);
 
-            if (clt_settings.pcap_time > session->last_pcap_time) {
-                fr->time_diff = clt_settings.pcap_time - session->last_pcap_time;
+            if (clt_settings.pcap_time > sess->last_pcap_time) {
+                fr->time_diff = clt_settings.pcap_time - sess->last_pcap_time;
+                if (clt_settings.accelerated_times > 1) {
+                    fr->time_diff /= clt_settings.accelerated_times;
+                }
             } else {
                 fr->time_diff = 0;
             }
 
-            session->last_pcap_time = clt_settings.pcap_time;
+            sess->last_pcap_time = clt_settings.pcap_time;
 
-            if (session->last_ack_seq == ack_seq && cont_len > 0) {
+            if (sess->last_ack_seq == ack_seq && cont_len > 0) {
                 fr->belong_to_the_same_req = 1;
                 tc_log_debug1(LOG_DEBUG, 0, "belong to the same req:%u", ntohs(src_port));
             } else {
                 tc_log_debug1(LOG_DEBUG, 0, "a new req:%u", ntohs(src_port)); 
             }
-            session->last_ack_seq = ack_seq;
+            sess->last_ack_seq = ack_seq;
         }
     }
 }
