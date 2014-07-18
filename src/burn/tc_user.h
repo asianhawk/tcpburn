@@ -78,11 +78,12 @@ typedef struct tc_user_s {
     uint16_t dst_port;
 
     uint16_t wscale;
-    uint32_t last_seq;
-    uint32_t last_ack_seq;
-    uint32_t history_last_ack_seq;
-    uint32_t exp_seq;
-    uint32_t exp_ack_seq;
+    uint32_t last_seq;             /* network byte order */
+    uint32_t last_ack_seq;         /* host byte order */
+    uint32_t history_last_ack_seq; /* network byte order */
+    uint32_t exp_seq;              /* host byte order */
+    uint32_t exp_ack_seq;          /* network byte order */
+    uint32_t last_snd_ack_seq;     /* host byte order */ 
     
     uint32_t fast_retransmit_cnt:6;
 

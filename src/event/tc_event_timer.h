@@ -38,10 +38,12 @@ tc_event_update_timer(tc_event_timer_t *ev, tc_msec_t timer)
         if (ev->timer_set) {
             diff = (tc_msec_int_t) (key - ev->timer.key);
             if (tc_abs(diff) < TC_TIMER_LAZY_DELAY) {
+                tc_log_debug0(LOG_DEBUG, 0, "two timers are too close"); 
                 return false;
             }
 
             if (diff > 0) {
+                tc_log_debug0(LOG_DEBUG, 0, "future timer is suppressed"); 
                 return false;
             }
             tc_event_del_timer(ev);

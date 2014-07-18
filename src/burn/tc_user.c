@@ -762,13 +762,15 @@ tc_lantency_ctl(tc_event_timer_t *ev)
 {
     int        lantency;
     bool       timer_set = false;
+    uint32_t   exp_h_ack_seq;
     tc_user_t *u = ev->data;
 
     if (u != NULL) {
         if (u->state.over) {
             return;
         }
-        tc_log_debug1(LOG_INFO, 0, "timer type:%u", u->state.timer_type); 
+        tc_log_debug2(LOG_INFO, 0, "timer type:%u, ev:%llu", 
+                u->state.timer_type, ev); 
         if (u->state.timer_type == TYPE_DELAY_ACK) {
             if (u->state.sess_continue) {
                 process_user_packet(u);
@@ -787,17 +789,22 @@ tc_lantency_ctl(tc_event_timer_t *ev)
                 u->state.set_rto = 0;
                 if (before(u->last_ack_seq, u->exp_seq)) {
                     retransmit(u, u->last_ack_seq);
-                    tc_log_debug1(LOG_INFO, 0, "rto:%llu", ntohs(u->src_port));
+                    tc_log_debug1(LOG_INFO, 0, "rto:%u", ntohs(u->src_port));
                 }    
             }
         }    
 
-        if (!timer_set && !u->state.over && u->orig_frame != NULL) {
-            lantency = u->orig_frame->time_diff;
-            if (lantency < u->rtt) {
-                lantency = u->rtt;
+        if (!timer_set && !u->state.over) {
+            exp_h_ack_seq = ntohl(u->exp_ack_seq);
+            if (after(exp_h_ack_seq, u->last_snd_ack_seq)) {
+                utimer_disp(u, u->rtt, TYPE_DELAY_ACK);
+            } else if (u->orig_frame != NULL) {
+                lantency = u->orig_frame->time_diff;
+                if (lantency < u->rtt) {
+                    lantency = u->rtt;
+                }
+                utimer_disp(u, lantency, TYPE_ACT);
             }
-            utimer_disp(u, lantency, TYPE_ACT);
         }
     } else {
         tc_log_info(LOG_ERR, 0, "sesson already deleted:%llu", ev); 
@@ -813,11 +820,16 @@ utimer_disp(tc_user_t *u, int lty, int type)
     if (u->state.evt_added) {
         if (tc_event_update_timer(&u->ev, timeout)) {
             u->state.timer_type = type;
+        } else {
+            tc_log_debug2(LOG_INFO, 0, "not update:%d,p:%u", timeout, 
+                    ntohs(u->src_port)); 
         }
     } else {
         u->state.evt_added = 1;
         tc_event_add_timer(NULL, &u->ev, timeout, u, tc_lantency_ctl);
         u->state.timer_type = type;
+        tc_log_debug2(LOG_INFO, 0, "add timer, ev:%llu,p:%u", &u->ev, 
+                    ntohs(u->src_port)); 
     }    
 }
 
@@ -874,6 +886,7 @@ process_packet(tc_user_t *u, unsigned char *frame)
     u->history_last_ack_seq = tcp->ack_seq;
     u->state.last_ack_recorded = 1;
     tcp->ack_seq = u->exp_ack_seq;
+    u->last_snd_ack_seq = ntohl(tcp->ack_seq);
     ip->daddr = u->dst_addr;
     tcp->dest = u->dst_port;
 
@@ -1283,7 +1296,6 @@ process_outgress(unsigned char *packet)
             if (after(cur_target_ack_seq, last_target_ack_seq) || tcp->fin) {
                 u->exp_ack_seq = htonl(cur_target_ack_seq);
                 utimer_disp(u, u->rtt, TYPE_DELAY_ACK);
-                tc_log_debug1(LOG_INFO, 0, "timer set:%u", ntohs(u->src_port));
             } else {
                 u->rtt = u->rtt >> 1;
                 tc_log_debug2(LOG_INFO, 0, "retrans bf fin, rtt:%ld,p:%u", 
