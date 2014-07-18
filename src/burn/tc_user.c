@@ -766,6 +766,9 @@ tc_lantency_ctl(tc_event_timer_t *ev)
     tc_user_t *u = ev->data;
 
     if (u != NULL) {
+        if (u->state.over) {
+            return;
+        }
         tc_log_debug1(LOG_INFO, 0, "timer type:%u", u->state.timer_type); 
         if (u->state.timer_type == TYPE_DELAY_ACK) {
             if (u->state.sess_continue) {
@@ -1228,7 +1231,7 @@ void
 process_outgress(unsigned char *packet)
 {
     uint16_t           size_ip, size_tcp, tot_len, cont_len;
-    uint32_t           seq, ack_seq;
+    uint32_t           seq, ack_seq, clt_next_ack_seq;
     uint64_t           key;
     tc_user_t         *u;
     tc_ip_header_t    *ip_header;
@@ -1283,9 +1286,16 @@ process_outgress(unsigned char *packet)
             u->last_recv_resp_cont_time = tc_milliscond_time();
             tc_stat.resp_cont_cnt++;
             u->state.resp_waiting = 0;   
-            u->exp_ack_seq = htonl(seq + cont_len);
-            utimer_disp(u, u->rtt, TYPE_DELAY_ACK);
-            tc_log_debug1(LOG_INFO, 0, "timer set:%u", ntohs(u->src_port));
+            clt_next_ack_seq = htonl(seq + cont_len);
+            if (after(clt_next_ack_seq, u->exp_ack_seq) || tcp_header->fin) {
+                u->exp_ack_seq = clt_next_ack_seq;
+                utimer_disp(u, u->rtt, TYPE_DELAY_ACK);
+                tc_log_debug1(LOG_INFO, 0, "timer set:%u", ntohs(u->src_port));
+            } else {
+                u->rtt = u->rtt >> 1;
+                tc_log_debug2(LOG_INFO, 0, "retrans bf fin, rtt:%ld,p:%u", 
+                        u->rtt, ntohs(u->src_port));
+            }
         } else {
             u->exp_ack_seq = tcp_header->seq;
         }
