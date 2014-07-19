@@ -577,7 +577,7 @@ send_stop(tc_user_t *u)
 
     if (u->state.resp_waiting) {
         send_diff = tc_time() - u->last_sent_time;
-        if (send_diff >= 6) {
+        if (send_diff > 3) {
             if (utimer_disp(u, clt_settings.sess_timeout, TYPE_ACT)) {
                 u->state.timeout_set = 1;
             }
@@ -807,6 +807,9 @@ tc_lantency_ctl(tc_event_timer_t *ev)
                     lantency = u->orig_frame->time_diff;
                     if (lantency < u->rtt) {
                         lantency = u->rtt;
+                    }
+                    if (u->state.resp_waiting) {
+                        lantency = lantency > 1000 ? lantency : 1000;
                     }
                     utimer_disp(u, lantency, TYPE_ACT);
                 }
