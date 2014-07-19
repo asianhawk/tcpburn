@@ -575,14 +575,6 @@ send_stop(tc_user_t *u)
         }
     }
 
-    send_diff = tc_time() - u->last_sent_time;
-    if (send_diff >= 3) {
-        tc_log_debug1(LOG_DEBUG, 0, "timeout, need to send more packet:%d", 
-                ntohs(u->src_port));
-        u->state.resp_waiting = 0; 
-        return false;
-    }
-
     if (u->state.resp_waiting) {
             tc_log_debug1(LOG_DEBUG, 0, "client wait server resp:%d", 
                 ntohs(u->src_port));
@@ -590,6 +582,16 @@ send_stop(tc_user_t *u)
     }
 
     if (u->state.status & SEND_REQ) {
+        send_diff = tc_time() - u->last_sent_time;
+        if (send_diff >= 3) {
+            if (u->state.status & SERVER_FIN) {
+                tc_log_debug1(LOG_DEBUG, 0, "server already not welcome:%d", 
+                        ntohs(u->src_port));
+                send_faked_rst(u);
+                return true;
+            }
+        }
+
         if (u->orig_frame->next != NULL) {
             srv_sk_buf_s = u->orig_frame->next->seq - u->orig_frame->seq;
             srv_sk_buf_s = srv_sk_buf_s + u->orig_frame->seq - u->last_ack_seq;
@@ -599,7 +601,6 @@ send_stop(tc_user_t *u)
                 return true;
             }
         }
-
     }
 
     app_resp_diff = tc_milliscond_time() - u->last_recv_resp_cont_time;
@@ -994,9 +995,13 @@ process_user_packet(tc_user_t *u)
             tc_log_debug2(LOG_DEBUG, 0, "user state:%d,port:%u",
                 u->state.status, ntohs(u->src_port));
             if (u->state.status & SYN_CONFIRM) {
-                tc_log_debug1(LOG_DEBUG, 0, "set resp wait:%u", 
-                        ntohs(u->src_port));
-                u->state.resp_waiting = 1;
+                if (!(u->state.status & SERVER_FIN)) {
+                    tc_log_debug1(LOG_DEBUG, 0, "set resp wait:%u", 
+                            ntohs(u->src_port));
+                    u->state.resp_waiting = 1;
+                } else {
+                    send_faked_rst(u);
+                }
             }
             break;
         } else {
@@ -1482,7 +1487,7 @@ tc_interval_dispose(tc_event_timer_t *evt)
 void 
 release_user_resources()
 {
-    int                 i, rst_send_cnt = 0, valid_sess = 0;
+    int                 i, diff, rst_send_cnt = 0, valid_sess = 0;
     frame_t            *fr;
     tc_user_t          *u;
     p_sess_entry        e;
@@ -1500,11 +1505,17 @@ release_user_resources()
                     tc_log_info(LOG_NOTICE, 0, "connection fails:%s:%u", 
                             inet_ntoa(targ_addr.sin_addr), ntohs(u->src_port));
                 }
-                if (u->total_packets_sent < u->orig_sess->frames) {
+                   
+                diff = u->orig_sess->frames - u->total_packets_sent;
+                if (diff > 0) {
                     tc_log_debug3(LOG_DEBUG, 0, 
                             "total sent frames:%u, total:%u, p:%u", 
                             u->total_packets_sent, u->orig_sess->frames, 
                             ntohs(u->src_port));
+                    if (diff > 1) {
+                        tc_log_debug2(LOG_NOTICE, 0, "lost packs:%d, p:%u", 
+                            diff, ntohs(u->src_port));
+                    }
                 }
                 if (u->state.status && !u->state.over) {
                     send_faked_rst(u);
