@@ -192,7 +192,7 @@ read_args(int argc, char **argv)
                 usage();
                 return -1;
             case 'v':
-                printf ("burn version:%s\n", VERSION);
+                printf ("tcpburn version:%s\n", VERSION);
                 return -1;
             case 'd':
                 clt_settings.do_daemonize = 1;

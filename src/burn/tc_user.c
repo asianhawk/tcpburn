@@ -16,7 +16,7 @@ static tc_user_index_t  *user_index_array = NULL;
 static tc_user_t        *user_array       = NULL;
 static sess_table_t     *s_table          = NULL;
 
-static void utimer_disp(tc_user_t *u, int lty, int type);
+static bool utimer_disp(tc_user_t *u, int lty, int type);
 static bool process_user_packet(tc_user_t *u);
 static void send_faked_ack(tc_user_t *u);
 static void send_faked_rst(tc_user_t *u);
@@ -576,22 +576,16 @@ send_stop(tc_user_t *u)
     }
 
     if (u->state.resp_waiting) {
-            tc_log_debug1(LOG_DEBUG, 0, "client wait server resp:%d", 
-                ntohs(u->src_port));
+        send_diff = tc_time() - u->last_sent_time;
+        if (send_diff >= 6) {
+            if (utimer_disp(u, clt_settings.sess_timeout, TYPE_ACT)) {
+                u->state.timeout_set = 1;
+            }
+        }
         return true;
     }
 
     if (u->state.status & SEND_REQ) {
-        send_diff = tc_time() - u->last_sent_time;
-        if (send_diff >= 3) {
-            if (u->state.status & SERVER_FIN) {
-                tc_log_debug1(LOG_DEBUG, 0, "server already not welcome:%d", 
-                        ntohs(u->src_port));
-                send_faked_rst(u);
-                return true;
-            }
-        }
-
         if (u->orig_frame->next != NULL) {
             srv_sk_buf_s = u->orig_frame->next->seq - u->orig_frame->seq;
             srv_sk_buf_s = srv_sk_buf_s + u->orig_frame->seq - u->last_ack_seq;
@@ -762,7 +756,7 @@ static void
 tc_lantency_ctl(tc_event_timer_t *ev) 
 {
     int        lantency;
-    bool       timer_set = false;
+    bool       timer_set = false, pure_activate = false;
     uint32_t   exp_h_ack_seq;
     tc_user_t *u = ev->data;
 
@@ -780,7 +774,15 @@ tc_lantency_ctl(tc_event_timer_t *ev)
                 tc_delay_ack(u, ev); 
             }
         } else if (u->state.timer_type == TYPE_ACT) {
-            process_user_packet(u);
+            if (!u->state.timeout_set) {
+                process_user_packet(u);
+                pure_activate = true;
+            } else {
+                send_faked_rst(u);
+                u->state.over = 1;
+                tc_log_debug1(LOG_INFO, 0, "timeout session:%u", 
+                        ntohs(u->src_port));
+            }
         } else if (u->state.timer_type == TYPE_RTO) {
             if (u->state.snd_after_set_rto) {
                 utimer_disp(u, DEFAULT_RTO, TYPE_RTO);
@@ -795,16 +797,19 @@ tc_lantency_ctl(tc_event_timer_t *ev)
             }
         }    
 
-        if (!timer_set && !u->state.over) {
-            exp_h_ack_seq = ntohl(u->exp_ack_seq);
-            if (after(exp_h_ack_seq, u->last_snd_ack_seq)) {
-                utimer_disp(u, u->rtt, TYPE_DELAY_ACK);
-            } else if (u->orig_frame != NULL) {
-                lantency = u->orig_frame->time_diff;
-                if (lantency < u->rtt) {
-                    lantency = u->rtt;
+        if (!(pure_activate && u->state.timeout_set)) {
+            u->state.timeout_set = 0;
+            if (!timer_set && !u->state.over) {
+                exp_h_ack_seq = ntohl(u->exp_ack_seq);
+                if (after(exp_h_ack_seq, u->last_snd_ack_seq)) {
+                    utimer_disp(u, u->rtt, TYPE_DELAY_ACK);
+                } else if (u->orig_frame != NULL) {
+                    lantency = u->orig_frame->time_diff;
+                    if (lantency < u->rtt) {
+                        lantency = u->rtt;
+                    }
+                    utimer_disp(u, lantency, TYPE_ACT);
                 }
-                utimer_disp(u, lantency, TYPE_ACT);
             }
         }
     } else {
@@ -813,7 +818,7 @@ tc_lantency_ctl(tc_event_timer_t *ev)
 }
 
 
-static void
+static bool 
 utimer_disp(tc_user_t *u, int lty, int type)
 {
     int timeout = lty > 0 ? lty:1;
@@ -821,9 +826,11 @@ utimer_disp(tc_user_t *u, int lty, int type)
     if (u->state.evt_added) {
         if (tc_event_update_timer(&u->ev, timeout)) {
             u->state.timer_type = type;
+            return true;
         } else {
             tc_log_debug2(LOG_INFO, 0, "not update:%d,p:%u", timeout, 
                     ntohs(u->src_port)); 
+            return false;
         }
     } else {
         u->state.evt_added = 1;
@@ -831,6 +838,7 @@ utimer_disp(tc_user_t *u, int lty, int type)
         u->state.timer_type = type;
         tc_log_debug2(LOG_INFO, 0, "add timer, ev:%llu,p:%u", &u->ev, 
                     ntohs(u->src_port)); 
+        return true;
     }    
 }
 

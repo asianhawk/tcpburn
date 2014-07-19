@@ -61,6 +61,7 @@ typedef struct tc_user_state_s{
     uint32_t last_ack_recorded:1;
     uint32_t evt_added:1;
     uint32_t set_rto:1;
+    uint32_t timeout_set:1;
     uint32_t snd_after_set_rto:1;
 }tc_user_state_t;
 
