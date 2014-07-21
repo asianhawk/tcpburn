@@ -313,10 +313,10 @@ tc_retrieve_user(uint64_t key)
 
     min = user_index_array[index].index;
 
-    if (index == (size_of_user_index -1)) {
-        max = size_of_users;
-    } else {
+    if (index != (size_of_user_index - 1)) {
         max = user_index_array[index + 1].index;
+    } else {
+        max = size_of_users;
     }
 
     tc_log_debug3(LOG_DEBUG, 0, "retrieve user,usr key :%llu,min=%d,max=%d", 
@@ -336,12 +336,12 @@ get_port(int default_port)
 {
     int value;
 
-    if (clt_settings.port_seed) {
+    if (!clt_settings.port_seed) {
+        value = default_port;
+    } else {
         value = (int) ((rand_r(&clt_settings.port_seed) / (RAND_MAX + 1.0)) * 
                 VALID_PORTS_NUM);
         value += FIRST_PORT;
-    } else {
-        value = default_port;
     }
 
     return htons((uint16_t) value);
@@ -439,11 +439,12 @@ tc_build_users(int port_prioritized, int num_users, uint32_t *ips, int num_ip)
     memset(slot_cnt, 0 ,sizeof(int) * size_of_user_index);
     memset(sub_keys, 0, sizeof(int) * size_of_users);
 
-    if (port_prioritized) {
-        for ( i = 0; i < num_ip; i++) {
-            ip = ips[i];
-            for (j = FIRST_PORT; j <= LAST_PORT; j++) {
-                port = get_port(j);
+    if (!port_prioritized) {
+        for (j = FIRST_PORT; j <= LAST_PORT; j++) {
+            port = get_port(j);
+            for ( i = 0; i < num_ip; i++) {
+                ip = ips[i];
+
                 key = tc_get_key(ip, port);
                 if (count >= size_of_users) {
                     break;
@@ -461,11 +462,11 @@ tc_build_users(int port_prioritized, int num_users, uint32_t *ips, int num_ip)
             }
         }
     } else {
-        for (j = FIRST_PORT; j <= LAST_PORT; j++) {
-            port = get_port(j);
-            for ( i = 0; i < num_ip; i++) {
-                ip = ips[i];
 
+        for ( i = 0; i < num_ip; i++) {
+            ip = ips[i];
+            for (j = FIRST_PORT; j <= LAST_PORT; j++) {
+                port = get_port(j);
                 key = tc_get_key(ip, port);
                 if (count >= size_of_users) {
                     break;
@@ -1114,10 +1115,14 @@ retransmit(tc_user_t *u, uint32_t cur_ack_seq)
             tc_log_debug1(LOG_DEBUG, 0, "packets retransmitted:%u", 
                     ntohs(u->src_port));
             process_packet(u, unack_frame->frame_data);
+            tc_stat.retransmit_cnt++;
             break;
         } else if (before(unack_frame->seq, cur_ack_seq) && next != NULL &&
                 before(cur_ack_seq, next->seq)) 
         {
+            tc_log_debug1(LOG_DEBUG, 0, "packets partly retransmitted:%u", 
+                    ntohs(u->src_port));
+            tc_stat.retransmit_cnt++;
             process_packet(u, unack_frame->frame_data);
             break;
         } else if (before(unack_frame->seq, cur_ack_seq)) {
@@ -1478,8 +1483,8 @@ output_stat()
     tc_log_info(LOG_NOTICE, 0, "reject:%llu, reset recv:%llu,fin recv:%llu",
             tc_stat.conn_reject_cnt, tc_stat.rst_recv_cnt, 
             tc_stat.fin_recv_cnt);
-    tc_log_info(LOG_NOTICE, 0, "reset sent:%llu, fin sent:%llu",
-            tc_stat.rst_sent_cnt, tc_stat.fin_sent_cnt);
+    tc_log_info(LOG_NOTICE, 0, "reset sent:%llu, fin:%llu, retrans:%llu",
+            tc_stat.rst_sent_cnt, tc_stat.fin_sent_cnt, tc_stat.retransmit_cnt);
     tc_log_info(LOG_NOTICE, 0, "conns:%llu,resp packs:%llu,c-resp packs:%llu",
             tc_stat.conn_cnt, tc_stat.resp_cnt, tc_stat.resp_cont_cnt);
     tc_log_info(LOG_NOTICE, 0, 

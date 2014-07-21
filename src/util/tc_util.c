@@ -44,6 +44,9 @@ get_l2_len(const unsigned char *frame, const int pkt_len, const int datalink)
     struct ethernet_hdr *eth_hdr;
 
     switch (datalink) {
+        case DLT_LINUX_SLL:
+            return SLL_HDR_LEN;
+            break;
         case DLT_RAW:
             return 0;
             break;
@@ -60,9 +63,6 @@ get_l2_len(const unsigned char *frame, const int pkt_len, const int datalink)
             break;
         case DLT_C_HDLC:
             return CISCO_HDLC_LEN;
-            break;
-        case DLT_LINUX_SLL:
-            return SLL_HDR_LEN;
             break;
         default:
             tc_log_info(LOG_ERR, 0, "unsupported DLT type: %s (0x%x)", 
