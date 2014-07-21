@@ -131,7 +131,7 @@ tc_raw_socket_send(int fd, void *buf, size_t len, uint32_t ip)
             }  else {
                 offset += send_len;
             }   
-        } while (offset < len);
+        } while (offset < (ssize_t) len);
     }
 
     return TC_OK;

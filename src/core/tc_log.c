@@ -30,7 +30,7 @@ tc_vscnprintf(char *buf, size_t size, const char *fmt, va_list args)
      */
     i = vsnprintf(buf, size, fmt, args);
 
-    if (i < size) {
+    if (i < (int) size) {
         return i;
     }
 

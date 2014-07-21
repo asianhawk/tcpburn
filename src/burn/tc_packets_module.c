@@ -429,7 +429,7 @@ read_packets_from_pcap(char *pcap_file, char *filter)
             } else {
 
                 ip_data = get_ip_data(pcap, pkt_data, pkt_hdr.len, &l2_len);
-                if (l2_len < ETHERNET_HDR_LEN) {
+                if (l2_len < (int) ETHERNET_HDR_LEN) {
                     tc_log_info(LOG_WARN, 0, "l2 len is %d", l2_len);
                     continue;
                 }
@@ -523,7 +523,7 @@ calculate_mem_pool_size(char *pcap_file, char *filter)
 
             if (pkt_hdr.caplen >= pkt_hdr.len) {
                 ip_data = get_ip_data(pcap, pkt_data, pkt_hdr.len, &l2_len);
-                if (l2_len < ETHERNET_HDR_LEN) {
+                if (l2_len < (int) ETHERNET_HDR_LEN) {
                     continue;
                 }
 
