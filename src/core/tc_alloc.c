@@ -2,9 +2,6 @@
 #include <xcopy.h>
 
 tc_uint_t  tc_pagesize;
-tc_uint_t  tc_pagesize_shift;
-tc_uint_t  tc_cacheline_size;
-
 
 void *
 tc_alloc(size_t size)

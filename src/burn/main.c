@@ -760,6 +760,8 @@ settings_init()
     clt_settings.output_if_name = NULL;
 #endif
 
+    tc_pagesize = getpagesize();
+
     tc_raw_socket_out = TC_INVALID_SOCKET;
 }
 

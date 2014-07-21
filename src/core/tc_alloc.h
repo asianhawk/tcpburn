@@ -22,8 +22,6 @@ void *tc_memalign(size_t alignment, size_t size);
 
 
 extern tc_uint_t  tc_pagesize;
-extern tc_uint_t  tc_pagesize_shift;
-extern tc_uint_t  tc_cacheline_size;
 
 
 #endif /* _TC_ALLOC_H_INCLUDED_ */
