@@ -112,11 +112,9 @@ tc_add_sess(p_sess_entry entry)
 static void
 tc_init_sess_for_users()
 {
-    bool            is_find = false;
     int             i, index = 0;
     tc_user_t      *u, *prev;
     p_link_node     ln;
-    p_sess_entry    e = NULL;
 
     if (s_table->num_of_sess == 0) {
         tc_log_info(LOG_ERR, 0, "no sess for replay");
@@ -1428,6 +1426,8 @@ could_start_sess(tc_user_t *u)
         if (diff1  >= diff2) {
             return true;
         }
+
+        return false;
 
     } else {
         tc_log_info(LOG_ERR, 0, "topo previous sess is null");

@@ -9,34 +9,6 @@ volatile struct tm  tc_current_tm;
 
 static char cache_err_log_time[TC_ERR_LOG_TIME_STR_LEN];
 
-int
-tc_time_set_timer(long msec)
-{
-    struct itimerval value;
-
-    value.it_value.tv_sec = msec / 1000;
-    value.it_value.tv_usec = (msec % 1000) * 1000;
-    value.it_interval.tv_sec = msec / 1000;
-    value.it_interval.tv_usec = (msec % 1000) * 1000;
-
-    if (setitimer(ITIMER_REAL, &value, NULL) == -1) {
-        tc_log_info(LOG_ERR, errno, "setitimer failed");   
-        return TC_ERROR;
-    }
-
-    return TC_OK;
-}
-
-int
-tc_time_remove_timer()
-{
-    if (setitimer(ITIMER_REAL, NULL, NULL) == -1) {
-        tc_log_info(LOG_ERR, errno, "setitimer failed");   
-        return TC_ERROR;
-    }
-
-    return TC_OK;
-}
 
 void 
 tc_time_init()

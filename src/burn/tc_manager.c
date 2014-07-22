@@ -39,10 +39,6 @@ burn_release_resources()
 
     output_stat(); 
 
-
-    tc_time_remove_timer();
-    tc_log_info(LOG_NOTICE, 0, "remove timer over");
-
     release_user_resources();
 
     tc_event_loop_finish(&event_loop);

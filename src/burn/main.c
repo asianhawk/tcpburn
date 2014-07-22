@@ -765,18 +765,6 @@ settings_init()
 }
 
 
-static int 
-set_timer()
-{
-    if (tc_time_set_timer(TIMER_INTERVAL) == TC_ERROR) {
-        tc_log_info(LOG_ERR, 0, "set timer error");
-        return -1;
-    }
-
-    return 0;
-}
-
-
 /*
  * main entry point
  */
@@ -818,10 +806,6 @@ main(int argc, char **argv)
 
     /* set details for running */
     if (set_details() == -1) {
-        return -1;
-    }
-
-    if (set_timer() == -1) {
         return -1;
     }
 
