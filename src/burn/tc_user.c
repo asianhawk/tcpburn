@@ -747,7 +747,7 @@ fill_frame(struct ethernet_hdr *hdr, unsigned char *smac, unsigned char *dmac)
 
 
 static inline void
-tc_delay_ack(tc_user_t *u, tc_event_timer_t *ev)
+tc_delay_ack(tc_user_t *u)
 {
     send_faked_ack(u); 
 }
@@ -772,7 +772,7 @@ tc_lantency_ctl(tc_event_timer_t *ev)
                 process_user_packet(u);
                 u->state.sess_continue = 0;
             } else {
-                tc_delay_ack(u, ev); 
+                tc_delay_ack(u); 
             }
         } else if (u->state.timer_type == TYPE_ACT) {
             if (!u->state.timeout_set) {

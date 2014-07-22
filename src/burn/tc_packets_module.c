@@ -71,8 +71,7 @@ append_by_order(sess_data_t *s, frame_t *added_frame)
 
 static void 
 record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq, 
-        uint32_t ack_seq, uint16_t src_port, bool saved, 
-        uint16_t cont_len, int status)
+        uint32_t ack_seq, bool saved, uint16_t cont_len, int status)
 {
     frame_t      *fr;
     sess_data_t  *sess;
@@ -84,7 +83,7 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
     entry = tc_retrieve_sess(key);
 
     if (status == SYN_SENT) {
-        tc_log_debug1(LOG_DEBUG, 0, "reuse port:%llu", ntohs(src_port));
+        tc_log_debug0(LOG_DEBUG, 0, "reuse port");
         entry = NULL;
     }
     if (entry == NULL) {
@@ -160,7 +159,7 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
         } else if ((sess->status & SEND_REQ) && 
                 (!(sess->status & CLIENT_FIN))) 
         {
-            tc_log_debug1(LOG_DEBUG, 0, "dropped:%u", ntohs(src_port));
+            tc_log_debug0(LOG_DEBUG, 0, "dropped");
             return;
         }
 
@@ -199,9 +198,7 @@ record_packet(uint64_t key, unsigned char *frame, int frame_len, uint32_t seq,
 
             if (sess->last_ack_seq == ack_seq && cont_len > 0) {
                 fr->belong_to_the_same_req = 1;
-                tc_log_debug1(LOG_DEBUG, 0, "belong to the same req:%u", ntohs(src_port));
-            } else {
-                tc_log_debug1(LOG_DEBUG, 0, "a new req:%u", ntohs(src_port)); 
+                tc_log_debug0(LOG_DEBUG, 0, "belong to the same req");
             }
             sess->last_ack_seq = ack_seq;
         }
@@ -330,11 +327,11 @@ dispose_packet(unsigned char *frame, int frame_len, int ip_recv_len)
             tmp_seq = ntohl(tcp->seq);
             record_packet(key, (unsigned char *) buf,
                     ETHERNET_HDR_LEN + pack_len, tmp_seq, ack_seq, 
-                    tcp->source, saved, cont_len, status);
+                    saved, cont_len, status);
         }
     } else {
-        record_packet(key, frame, frame_len, seq, ack_seq, 
-                tcp->source, saved, cont_len, status);
+        record_packet(key, frame, frame_len, seq, ack_seq, saved, 
+                cont_len, status);
     }
 
     return TC_OK;

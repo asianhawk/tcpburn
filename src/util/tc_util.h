@@ -15,8 +15,7 @@ unsigned short csum (unsigned short *packet, int pack_len);
 unsigned short tcpcsum(unsigned char *iphdr, unsigned short *packet,
         int pack_len);
 
-int get_l2_len(const unsigned char *frame, const int pkt_len, 
-        const int datalink);
+int get_l2_len(const unsigned char *frame, const int datalink);
 unsigned char *
 get_ip_data(pcap_t *pcap, unsigned char *frame, const int pkt_len, 
         int *p_l2_len);

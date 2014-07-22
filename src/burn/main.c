@@ -22,7 +22,6 @@ tc_event_loop_t event_loop;
 
 #if (TC_SIGACTION)
 static signal_t signals[] = {
-    { SIGALRM, "SIGALRM", 0,    tc_time_sig_alarm },
     { SIGINT,  "SIGINT",  0,    burn_over },
     { SIGPIPE, "SIGPIPE", 0,    burn_over },
     { SIGHUP,  "SIGHUP",  0,    burn_over },
@@ -34,7 +33,7 @@ static signal_t signals[] = {
 static void
 usage(void)
 {
-    printf("burn " VERSION "\n");
+    printf("tcpburn " VERSION "\n");
 #if (!TC_PCAP_SEND)
     printf("-x <transfer,> use <transfer,> to specify the IPs and ports of the source and target\n"
            "               servers. Suppose 'sourceIP' and 'sourcePort' are the IP and port \n"
@@ -261,7 +260,7 @@ read_args(int argc, char **argv)
 }
 
 static void
-output_for_debug(int argc, char **argv)
+output_for_debug()
 {
     /* print out version info */
     tc_log_info(LOG_NOTICE, 0, "burn version:%s", VERSION);
@@ -793,7 +792,6 @@ main(int argc, char **argv)
         return -1;
     }
 #else
-    signal(SIGALRM, tc_time_sig_alarm);
     signal(SIGINT,  burn_over);
     signal(SIGPIPE, burn_over);
     signal(SIGHUP,  burn_over);
@@ -811,7 +809,7 @@ main(int argc, char **argv)
     }
 
     /* output debug info */
-    output_for_debug(argc, argv);
+    output_for_debug();
 
     clt_settings.pool = tc_create_pool(TC_DEFAULT_POOL_SIZE, 0);
     if (clt_settings.pool == NULL) {

@@ -22,6 +22,5 @@ int  tc_time_remove_timer();
 void tc_time_init();
 void tc_time_update(void);
 void tc_localtime(time_t sec, struct tm *tm);
-void tc_time_sig_alarm(int sig);
 
 #endif /* TC_TIME_INCLUDED */

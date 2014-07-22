@@ -91,10 +91,4 @@ tc_localtime(time_t sec, struct tm *tm)
     tm->tm_year += 1900;
 }
 
-/* this is a signal handler */
-void
-tc_time_sig_alarm(int sig)
-{
-    tc_update_time = 1;
-}
 
